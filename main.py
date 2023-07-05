@@ -15,7 +15,7 @@ def main():
 
     torch.manual_seed(42)
 
-    # create dataset
+    # Create dataset
     phases = ['train', 'val', 'test']
     full_dataset = create_dataset('single_dof_duffing', batch_size * 10)
     train_size = int(0.8 * len(full_dataset))
@@ -32,20 +32,20 @@ def main():
                       num_workers=num_workers, pin_memory=True) for x in
         phases}
 
+    # Create model
+
     # Training loop
     epoch = 0
     while epoch < num_epochs:
         print('Epoch {}'.format(epoch))
         for phase in phases:
-
+            print('\tPhase {}'.format(phase))
             for i, sample in tqdm(enumerate(dataloaders[phase]),
                                   total=int(len(datasets[phase]) / dataloaders[phase].batch_size)):
                 sample = sample.to(device)
                 #print(sample)
 
         epoch += 1
-
-    # TODO create model
 
 
     return 0

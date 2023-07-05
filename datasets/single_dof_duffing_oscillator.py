@@ -52,7 +52,7 @@ class Duffing1DOFOscillator(BaseDataset):
         )
 
         # add forcing to dataset
-        data = np.concatenate([solution, external_force], axis=1)
+        data = np.concatenate([solution, t_span.reshape(-1,1)], axis=1)
 
         # normalize data
         self.maximum = data.max(axis=0)
@@ -60,8 +60,8 @@ class Duffing1DOFOscillator(BaseDataset):
         data = (data - self.minimum) / (self.maximum - self.minimum)
 
         # reshape to number of batches
-        # 2 n_dof for state and 1 n_dof for forces
-        data = np.reshape(data, [-1, seq_len, 3*n_dof])
+        # 2 n_dof for state and 1 n_dof for time
+        data = np.reshape(data, [-1, seq_len, 2*n_dof+1])
 
         self.data = data
 
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     example_parameters: dict = {
         't_start': 0.0,
         't_end': 100.0,
-        'dt': 0.01,
+        'dt': 0.1,
     }
 
     dataset = Duffing1DOFOscillator(example_system, example_parameters, seq_len=100)
@@ -98,3 +98,4 @@ if __name__ == '__main__':
 
     import matplotlib.pyplot as plt
     plt.plot(sample)
+    plt.show()

@@ -7,10 +7,10 @@ from typing import Union
 
 def create_dataset(phys_config: dict, sequence_length: int) -> Union[Duffing1DOFOscillator, None]:
     """
-    Create a dataset based on the given dataset type.
+    Create a dataset based on the given system setup.
 
     Args:
-        dataset_type: Type of dataset.
+        phys_config: Configuration of physical model.
         sequence_length: Length of sequences in the dataset.
 
     Returns:

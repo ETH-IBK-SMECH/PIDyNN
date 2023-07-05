@@ -31,7 +31,7 @@ class DuffingMDOFOscillator(BaseDataset):
         data = (data - self.minimum) / (self.maximum - self.minimum)
 
         # reshape to number of batches
-        # 2 n_dof for state and 1 n_dof for forces
+        # 2 n_dof for state and 1 n_dof for time
         data = np.reshape(data, [-1, seq_len, 2*n_dof+1])
 
         self.data = data

@@ -16,13 +16,15 @@ def main():
     torch.manual_seed(42)
 
     # create dataset
-    phases = ['train', 'test']
+    phases = ['train', 'val', 'test']
     full_dataset = create_dataset('single_dof_duffing', batch_size * 10)
     train_size = int(0.8 * len(full_dataset))
-    test_size = len(full_dataset) - train_size
-    train_dataset, test_dataset = torch.utils.data.random_split(full_dataset, [train_size, test_size])
+    val_size = int(0.1 * len(full_dataset))
+    test_size = int(0.1 * len(full_dataset))
+    train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(full_dataset, [train_size, val_size, test_size])
     datasets = {
         'train': train_dataset,
+        'val': val_dataset,
         'test': test_dataset
     }
     dataloaders = {
@@ -34,7 +36,7 @@ def main():
     epoch = 0
     while epoch < num_epochs:
         print('Epoch {}'.format(epoch))
-        for phase in ['train', 'test']:
+        for phase in phases:
 
             for i, sample in tqdm(enumerate(dataloaders[phase]),
                                   total=int(len(datasets[phase]) / dataloaders[phase].batch_size)):
@@ -42,8 +44,6 @@ def main():
                 #print(sample)
 
         epoch += 1
-
-
 
     # TODO create model
 

@@ -2,15 +2,13 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-
 import argparse
 from tqdm import tqdm
-
 from datasets.create_dataset import create_dataset
 from models.create_model import create_model
 
 
-def main(config):
+def main(config: argparse.Namespace) -> int:
     torch.manual_seed(42)
     device = torch.device('cpu')
 
@@ -42,37 +40,27 @@ def main(config):
     while epoch < config.num_epochs:
         print('Epoch {}'.format(epoch))
         for phase in phases:
-
             phase_loss = 0.
-
             print('\tPhase {}'.format(phase))
             if phase == 'train':
                 model.train()
             else:
                 model.eval()
-
             for i, sample in tqdm(enumerate(dataloaders[phase]),
                                   total=int(len(datasets[phase]) / dataloaders[phase].batch_size)):
-
                 # This data parsing is specific to the dummy example and will have to be changed
                 inputs = sample[..., 2:].to(device).float()
                 targets = sample[..., :2].to(device).float()
-
                 if phase == 'train':
                     optimizer.zero_grad()
-
                 predictions = model(inputs)
-                loss = criterion(predictions,  targets)
+                loss = criterion(predictions, targets)
                 phase_loss += loss.item()
-
                 if phase == 'train':
                     loss.backward()
                     optimizer.step()
-
             print(('\tLoss {}'.format(phase_loss)))
-
         epoch += 1
-
     return 0
 
 

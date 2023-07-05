@@ -1,7 +1,21 @@
 from datasets.single_dof_duffing_oscillator import Duffing1DOFOscillator
+from typing import Union
 
 
-def create_dataset(dataset_type, sequence_length):
+def create_dataset(dataset_type: str, sequence_length: int) -> Union[Duffing1DOFOscillator, None]:
+    """
+    Create a dataset based on the given dataset type.
+
+    Args:
+        dataset_type: Type of dataset.
+        sequence_length: Length of sequences in the dataset.
+
+    Returns:
+        The created dataset.
+
+    Raises:
+        NotImplementedError: If the specified dataset type is not implemented.
+    """
     if dataset_type == 'single_dof_duffing':
         example_system = {
             'mass': 1.0,
@@ -17,6 +31,6 @@ def create_dataset(dataset_type, sequence_length):
         }
         dataset = Duffing1DOFOscillator(example_system, example_parameters, seq_len=sequence_length)
     else:
-        raise NotImplementedError
+        raise NotImplementedError("Specified dataset type is not implemented.")
 
     return dataset

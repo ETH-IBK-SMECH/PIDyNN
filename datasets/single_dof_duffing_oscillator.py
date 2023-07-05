@@ -3,28 +3,33 @@ from scipy.interpolate import interp1d
 from scipy.integrate import odeint
 from torch.utils.data import Dataset as BaseDataset
 
-"""
-Remove this file once MDOF duffing oscillator is created.
-"""
 
+def duffing_oscillator(y: np.ndarray, t: float, f, k: float, c: float, alpha: float, m: float) -> np.ndarray:
+    """
+    Defines the equations of motion for the Duffing oscillator.
 
-def duffing_oscillator(y, t, f, k, c, alpha, m):
+    Args:
+        y: Array of position and velocity.
+        t: Time.
+        f: External force function.
+        k: Stiffness coefficient.
+        c: Damping coefficient.
+        alpha: Nonlinear coefficient.
+        m: Mass of the oscillator.
+
+    Returns:
+        Array of derivatives [dxdt, dvdt].
+    """
     x, v = y  # Unpack the state variables
 
     dxdt = v
     dvdt = (f(t) - c * v - k * x - alpha * x ** 3) / m
 
-    return [dxdt, dvdt]
+    return np.array([dxdt, dvdt])
 
 
 class Duffing1DOFOscillator(BaseDataset):
-
-    def __init__(self,
-                 dynamic_system,
-                 simulation_parameters,
-                 seq_len
-                 ):
-
+    def __init__(self, dynamic_system: dict, simulation_parameters: dict, seq_len: int):
         print('Simulating 1DOF Duffing oscillator...')
 
         n_dof = 1
@@ -33,17 +38,18 @@ class Duffing1DOFOscillator(BaseDataset):
         fint = interp1d(t_span, external_force[:, 0], fill_value='extrapolate')
 
         # Integrate the system using odeint
-        solution = odeint(duffing_oscillator,
-                          dynamic_system['initial_conditions'],
-                          t_span,
-                          args=(
-                              fint,
-                              dynamic_system['stiffness'],
-                              dynamic_system['damping'],
-                              dynamic_system['nonlinear_stiffness'],
-                              dynamic_system['mass']
-                          )
-                          )
+        solution = odeint(
+            duffing_oscillator,
+            dynamic_system['initial_conditions'],
+            t_span,
+            args=(
+                fint,
+                dynamic_system['stiffness'],
+                dynamic_system['damping'],
+                dynamic_system['nonlinear_stiffness'],
+                dynamic_system['mass']
+            )
+        )
 
         # add forcing to dataset
         data = np.concatenate([solution, external_force], axis=1)
@@ -59,20 +65,20 @@ class Duffing1DOFOscillator(BaseDataset):
 
         self.data = data
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> np.ndarray:
         return self.data[index]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.data.shape[0]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__class__.__name__
 
 
 if __name__ == '__main__':
     np.random.seed(42)
 
-    example_system = {
+    example_system: dict = {
         'mass': 1.0,
         'stiffness': 1.0,
         'damping': 0.1,
@@ -80,7 +86,7 @@ if __name__ == '__main__':
         'initial_conditions': [0.0, 0.0],
     }
 
-    example_parameters = {
+    example_parameters: dict = {
         't_start': 0.0,
         't_end': 100.0,
         'dt': 0.01,
@@ -92,4 +98,3 @@ if __name__ == '__main__':
 
     import matplotlib.pyplot as plt
     plt.plot(sample)
-    plt.show()

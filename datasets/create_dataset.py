@@ -1,7 +1,7 @@
 from datasets.single_dof_duffing_oscillator import Duffing1DOFOscillator
 
 
-def create_dataset(dataset_type, n_batches):
+def create_dataset(dataset_type, sequence_length):
     if dataset_type == 'single_dof_duffing':
         example_system = {
             'mass': 1.0,
@@ -12,11 +12,11 @@ def create_dataset(dataset_type, n_batches):
         }
         example_parameters = {
             't_start': 0.0,
-            't_end': 10.0,
+            't_end': 100.0,
             'dt': 0.01,
         }
-        dataset = Duffing1DOFOscillator(example_system, example_parameters, n_batches=n_batches)
+        dataset = Duffing1DOFOscillator(example_system, example_parameters, seq_len=sequence_length)
     else:
-        raise NotImplemented
+        raise NotImplementedError
 
     return dataset

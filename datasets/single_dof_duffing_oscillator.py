@@ -22,13 +22,13 @@ class Duffing1DOFOscillator(BaseDataset):
     def __init__(self,
                  dynamic_system,
                  simulation_parameters,
-                 n_batches
+                 seq_len
                  ):
 
-        # Simulate duffing oscillator
+        print('Simulating 1DOF Duffing oscillator...')
+
         n_dof = 1
         t_span = np.arange(simulation_parameters['t_start'], simulation_parameters['t_end'], simulation_parameters['dt'])
-        # Here I just multiply to scale down arbitrarily
         external_force = np.random.normal(0, 1, [len(t_span), 1])
         fint = interp1d(t_span, external_force[:, 0], fill_value='extrapolate')
 
@@ -55,7 +55,7 @@ class Duffing1DOFOscillator(BaseDataset):
 
         # reshape to number of batches
         # 2 n_dof for state and 1 n_dof for forces
-        data = np.reshape(data, [n_batches, -1, 3*n_dof])
+        data = np.reshape(data, [-1, seq_len, 3*n_dof])
 
         self.data = data
 
@@ -86,7 +86,7 @@ if __name__ == '__main__':
         'dt': 0.01,
     }
 
-    dataset = Duffing1DOFOscillator(example_system, example_parameters, n_batches=10)
+    dataset = Duffing1DOFOscillator(example_system, example_parameters, seq_len=100)
 
     sample = dataset[-1]
 

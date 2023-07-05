@@ -14,7 +14,10 @@ def main(config: argparse.Namespace) -> int:
 
     # Create dataset
     phases = ['train', 'val', 'test']
-    full_dataset = create_dataset('single_dof_duffing', config.sequence_length)
+    if config.n_dof == 1:
+        full_dataset = create_dataset('single_dof_duffing', config.sequence_length)
+    else:
+        full_dataset = create_dataset('multi_dof_duffing', config.sequence_length)
     train_size = int(0.8 * len(full_dataset))
     val_size = int(0.1 * len(full_dataset))
     test_size = int(0.1 * len(full_dataset))
@@ -49,8 +52,8 @@ def main(config: argparse.Namespace) -> int:
             for i, sample in tqdm(enumerate(dataloaders[phase]),
                                   total=int(len(datasets[phase]) / dataloaders[phase].batch_size)):
                 # This data parsing is specific to the dummy example and will have to be changed
-                inputs = sample[..., 2:].to(device).float()
-                targets = sample[..., :2].to(device).float()
+                inputs = sample[..., 6:].to(device).float()
+                targets = sample[..., :6].to(device).float()
                 if phase == 'train':
                     optimizer.zero_grad()
                 predictions = model(inputs)
@@ -68,15 +71,19 @@ if __name__ == '__main__':
     # parse config
     parser = argparse.ArgumentParser(description="Train PINN")
 
-    # model arguments
+    # physical-model arguments
+    parser.add_argument('--n_dofs', type=int, default=4)
+    parser.add_argument('--system-type', type=str, default='cantilever')
+
+    # nn-model arguments
     parser.add_argument('--model-type', type=str, default='MLP')
     parser.add_argument('--in-channels', type=int, default=1)
     parser.add_argument('--latent-features', type=int, default=5)
-    parser.add_argument('--out-channels', type=int, default=2)
+    parser.add_argument('--out-channels', type=int, default=6)
 
     # training arguments
     parser.add_argument('--batch-size', type=int, default=10)
-    parser.add_argument('--num-workers', type=int, default=2)
+    parser.add_argument('--num-workers', type=int, default=0)
     parser.add_argument('--num-epochs', type=int, default=100)
     parser.add_argument('--sequence-length', type=int, default=100)
     parser.add_argument('--learning-rate', type=float, default=1e-3)

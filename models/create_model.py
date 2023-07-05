@@ -29,9 +29,9 @@ def create_model(
         model = nn.Sequential(
             nn.Flatten(start_dim=1),
             nn.Linear(input_dim * seq_len, hidden_dim * seq_len),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(hidden_dim * seq_len, hidden_dim * seq_len),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(hidden_dim * seq_len, output_dim * seq_len),
             nn.Unflatten(dim=1, unflattened_size=(seq_len, output_dim)),
         )

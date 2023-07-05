@@ -3,31 +3,20 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
+import argparse
 from tqdm import tqdm
 
 from datasets.create_dataset import create_dataset
 from models.create_model import create_model
 
 
-def main():
+def main(config):
     torch.manual_seed(42)
     device = torch.device('cpu')
 
-    # args
-    batch_size = 10
-    sequence_length = 100
-    num_workers = 2
-    num_epochs = 10
-    learning_rate = 1e-3
-    weight_decay = 1e-4
-    model_type = 'MLP'
-    in_channels = 1
-    latent_features = 5
-    output_channels = 2
-
     # Create dataset
     phases = ['train', 'val', 'test']
-    full_dataset = create_dataset('single_dof_duffing', sequence_length)
+    full_dataset = create_dataset('single_dof_duffing', config.sequence_length)
     train_size = int(0.8 * len(full_dataset))
     val_size = int(0.1 * len(full_dataset))
     test_size = int(0.1 * len(full_dataset))
@@ -38,19 +27,19 @@ def main():
         'test': test_dataset
     }
     dataloaders = {
-        x: DataLoader(dataset=datasets[x], batch_size=batch_size, shuffle=True if x == 'train' else False,
-                      num_workers=num_workers, pin_memory=True) for x in
+        x: DataLoader(dataset=datasets[x], batch_size=config.batch_size, shuffle=True if x == 'train' else False,
+                      num_workers=config.num_workers, pin_memory=True) for x in
         phases}
 
     # Create model
-    model = create_model(model_type, in_channels, latent_features, output_channels, sequence_length)
+    model = create_model(config.model_type, config.in_channels, config.latent_features, config.out_channels, config.sequence_length)
     criterion = nn.MSELoss(reduction='sum')
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    optimizer = optim.Adam(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
 
     # Training loop
     epoch = 0
     model = model.to(device)
-    while epoch < num_epochs:
+    while epoch < config.num_epochs:
         print('Epoch {}'.format(epoch))
         for phase in phases:
 
@@ -88,4 +77,23 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # parse config
+    parser = argparse.ArgumentParser(description="Train PINN")
+
+    # model arguments
+    parser.add_argument('--model-type', type=str, default='MLP')
+    parser.add_argument('--in-channels', type=int, default=1)
+    parser.add_argument('--latent-features', type=int, default=5)
+    parser.add_argument('--out-channels', type=int, default=2)
+
+    # training arguments
+    parser.add_argument('--batch-size', type=int, default=10)
+    parser.add_argument('--num-workers', type=int, default=2)
+    parser.add_argument('--num-epochs', type=int, default=100)
+    parser.add_argument('--sequence-length', type=int, default=100)
+    parser.add_argument('--learning-rate', type=float, default=1e-3)
+    parser.add_argument('--weight-decay', type=float, default=1e-4)
+
+    args = parser.parse_args()
+
+    main(args)

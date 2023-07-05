@@ -13,11 +13,12 @@ def main(config: argparse.Namespace) -> int:
     device = torch.device('cpu')
 
     # Create dataset
+    phys_config = {
+        'n_dof' : config.n_dof,
+        'system-type' : config.system_type
+    }
     phases = ['train', 'val', 'test']
-    if config.n_dof == 1:
-        full_dataset = create_dataset('single_dof_duffing', config.sequence_length)
-    else:
-        full_dataset = create_dataset('multi_dof_duffing', config.sequence_length)
+    full_dataset = create_dataset(phys_config, config.sequence_length)
     train_size = int(0.8 * len(full_dataset))
     val_size = int(0.1 * len(full_dataset))
     test_size = int(0.1 * len(full_dataset))
@@ -33,6 +34,8 @@ def main(config: argparse.Namespace) -> int:
         phases}
 
     # Create model
+    if config.out_channels != 2*config.n_dof:
+        raise Exception("Number of network outputs does not match state vector of simulated model")
     model = create_model(config.model_type, config.in_channels, config.latent_features, config.out_channels, config.sequence_length)
     criterion = nn.MSELoss(reduction='sum')
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
@@ -52,8 +55,8 @@ def main(config: argparse.Namespace) -> int:
             for i, sample in tqdm(enumerate(dataloaders[phase]),
                                   total=int(len(datasets[phase]) / dataloaders[phase].batch_size)):
                 # This data parsing is specific to the dummy example and will have to be changed
-                inputs = sample[..., 6:].to(device).float()
-                targets = sample[..., :6].to(device).float()
+                inputs = sample[..., 2*config.n_dof:].to(device).float()
+                targets = sample[..., :2*config.n_dof].to(device).float()
                 if phase == 'train':
                     optimizer.zero_grad()
                 predictions = model(inputs)
@@ -72,14 +75,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Train PINN")
 
     # physical-model arguments
-    parser.add_argument('--n_dofs', type=int, default=4)
-    parser.add_argument('--system-type', type=str, default='cantilever')
+    parser.add_argument('--n-dof', type=int, default=4)
+    parser.add_argument('--system-type', type=str, default='multi_dof_duffing')
 
     # nn-model arguments
     parser.add_argument('--model-type', type=str, default='MLP')
     parser.add_argument('--in-channels', type=int, default=1)
     parser.add_argument('--latent-features', type=int, default=5)
-    parser.add_argument('--out-channels', type=int, default=6)
+    parser.add_argument('--out-channels', type=int, default=8)
 
     # training arguments
     parser.add_argument('--batch-size', type=int, default=10)

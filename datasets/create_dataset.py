@@ -5,7 +5,7 @@ import numpy as np
 from typing import Union
 
 
-def create_dataset(dataset_type: str, sequence_length: int) -> Union[Duffing1DOFOscillator, None]:
+def create_dataset(phys_config: dict, sequence_length: int) -> Union[Duffing1DOFOscillator, None]:
     """
     Create a dataset based on the given dataset type.
 
@@ -19,7 +19,7 @@ def create_dataset(dataset_type: str, sequence_length: int) -> Union[Duffing1DOF
     Raises:
         NotImplementedError: If the specified dataset type is not implemented.
     """
-    if dataset_type == 'single_dof_duffing':
+    if phys_config['system-type'] == 'single_dof_duffing':
         example_system = {
             'mass': 1.0,
             'stiffness': 1.0,
@@ -33,21 +33,19 @@ def create_dataset(dataset_type: str, sequence_length: int) -> Union[Duffing1DOF
             'dt': 0.1,
         }
         dataset = Duffing1DOFOscillator(example_system, example_parameters, seq_len=sequence_length)
-    elif dataset_type == 'multi_dof_duffing':
+    elif phys_config['system-type'] == 'multi_dof_duffing':
         example_system = {
-            'n_dof' : 3,
-            'mass_vector' : np.array([1.0]*3),
-            'damping_vector' : np.array([0.25]*3),
-            'stiffness_vector' : np.array([10.0]*3),
-            'nonlinear_stiffness_vector' : np.array([2.0, 0.0, 0.0]),
-            'excitations' : [
-                None,
+            'n_dof' : phys_config['n_dof'],
+            'mass_vector' : np.array([1.0]*phys_config['n_dof']),
+            'damping_vector' : np.array([0.25]*phys_config['n_dof']),
+            'stiffness_vector' : np.array([10.0]*phys_config['n_dof']),
+            'nonlinear_stiffness_vector' : np.array([2.0]+[0.0]*(phys_config['n_dof']-1)),
+            'excitations' : [None]*(phys_config['n_dof']-2) + [   # example adds forcing at the N-1th DOF
                 mdof_sim.actuators.rand_phase_ms(
                     freqs = np.array([0.7, 0.85, 1.6, 1.8]),
                     Sx = np.ones(4)
-                ),
-                None],
-            'initial_conditions' : np.array([-2.0, 0.0, 3.0, -2.0, 0.0, 0.0])
+                )] + [None],
+            'initial_conditions' : np.array([-2.0] + [0.0]*(phys_config['n_dof']-1) + [-2.0] + [0.0]*(phys_config['n_dof']-1))
         }
         example_parameters = {
             't_start': 0.0,

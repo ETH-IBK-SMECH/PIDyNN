@@ -30,9 +30,9 @@ def create_dataset(phys_config: dict, sequence_length: int) -> Union[Duffing1DOF
         example_parameters = {
             't_start': 0.0,
             't_end': 100.0,
-            'dt': 0.1,
+            'dt': 0.01,
         }
-        dataset = Duffing1DOFOscillator(example_system, example_parameters, seq_len=sequence_length)
+        dataset = Duffing1DOFOscillator(example_system, example_parameters, seq_len=sequence_length, downsample=10)
     elif phys_config['system-type'] == 'multi_dof_duffing':
         example_system = {
             'n_dof' : phys_config['n_dof'],
@@ -50,9 +50,9 @@ def create_dataset(phys_config: dict, sequence_length: int) -> Union[Duffing1DOF
         example_parameters = {
             't_start': 0.0,
             't_end': 100.0,
-            'dt': 0.1,
+            'dt': 0.01,
         }
-        dataset = DuffingMDOFOscillator(example_system, example_parameters, seq_len=sequence_length)
+        dataset = DuffingMDOFOscillator(example_system, example_parameters, seq_len=sequence_length, downsample=10)
     else:
         raise NotImplementedError("Specified dataset type is not implemented.")
 

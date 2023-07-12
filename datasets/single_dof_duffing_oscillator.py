@@ -29,7 +29,7 @@ def duffing_oscillator(y: np.ndarray, t: float, f, k: float, c: float, alpha: fl
 
 
 class Duffing1DOFOscillator(BaseDataset):
-    def __init__(self, dynamic_system: dict, simulation_parameters: dict, seq_len: int, downsample: int):
+    def __init__(self, dynamic_system: dict, simulation_parameters: dict, seq_len: int):
         print('Simulating 1DOF Duffing oscillator...')
 
         n_dof = 1
@@ -57,7 +57,7 @@ class Duffing1DOFOscillator(BaseDataset):
         # normalize data
         self.maximum = data.max(axis=0)
         self.minimum = data.min(axis=0)
-        self.downsample = downsample
+        self.downsample = simulation_parameters['downsample']
         data = (data - self.minimum) / (self.maximum - self.minimum)
 
         # reshape to number of batches
@@ -94,9 +94,10 @@ if __name__ == '__main__':
         't_start': 0.0,
         't_end': 1200.0,
         'dt': 0.01,
+        'downsample': 10,
     }
 
-    dataset = Duffing1DOFOscillator(example_system, example_parameters, seq_len=1200, downsample=10)
+    dataset = Duffing1DOFOscillator(example_system, example_parameters, seq_len=1200)
 
     sample = dataset[-1]
     ground_truth = dataset.get_original(-1)

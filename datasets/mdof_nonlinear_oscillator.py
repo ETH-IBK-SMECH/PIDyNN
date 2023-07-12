@@ -4,7 +4,7 @@ from torch.utils.data import Dataset as BaseDataset
 
 
 class DuffingMDOFOscillator(BaseDataset):
-    def __init__(self, dynamic_system: dict, simulation_parameters: dict, seq_len: int, downsample: int):
+    def __init__(self, dynamic_system: dict, simulation_parameters: dict, seq_len: int):
         print('Simulating MDOF Duffing oscillator')
 
         n_dof = dynamic_system['n_dof']
@@ -30,12 +30,12 @@ class DuffingMDOFOscillator(BaseDataset):
         # normalize data
         self.maximum = data.max(axis=0)
         self.minimum = data.min(axis=0)
-        self.downsample = downsample
+        self.downsample = simulation_parameters['downsample']
         data = (data - self.minimum) / (self.maximum - self.minimum)
 
         # reshape to number of batches
         # 2 n_dof for state and 1 n_dof for time
-        data = np.reshape(data, [-1, seq_len * downsample, 2 * n_dof + 1])
+        data = np.reshape(data, [-1, seq_len * self.downsample, 2 * n_dof + 1])
 
         self.data = data
 
@@ -74,9 +74,10 @@ if __name__ == '__main__':
         't_start': 0.0,
         't_end': 1200.0,
         'dt': 0.01,
+        'downsample': 10,
     }
 
-    dataset = DuffingMDOFOscillator(example_system, example_parameters, seq_len=1200, downsample=10)
+    dataset = DuffingMDOFOscillator(example_system, example_parameters, seq_len=1200)
 
     sample = dataset[-1]
     ground_truth = dataset.get_original(-1)

@@ -24,7 +24,7 @@ class exponent_stiffness(nonlinearity):
                     self.kn_ = kn_ * np.ones(dofs)
                     self.dofs = dofs
         
-        self.Cn = None
+        self.Cn = np.zeros((dofs,dofs+1))
         self.Kn = np.concatenate((np.diag(kn_), np.zeros((dofs,1))), axis=1) - np.concatenate((np.zeros((dofs,1)), np.diag(kn_[1:],1)), axis=1)
         
     def z_func(self, x, xdot):
@@ -50,7 +50,7 @@ class quadratic_damping(nonlinearity):
                     self.dofs = dofs
         
         self.Cn = np.concatenate((np.diag(cn_), np.zeros((dofs,1))), axis=1) - np.concatenate((np.zeros((dofs,1)), np.diag(cn_[1:],1)), axis=1)
-        self.Kn = None
+        self.Kn = np.zeros((dofs,dofs+1))
     
     def z_func(self, x, xdot):
         return np.concatenate((np.zeros(xdot.shape[0]),xdot**2),axis=0)

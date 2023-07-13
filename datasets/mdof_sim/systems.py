@@ -23,8 +23,8 @@ class symmetric(mdof_system):
 
         if nonlinearity is not None:
             self.nonlin_transform = lambda z : nonlinearity.z_func(
-                np.cat((z[:dofs],2*z[dofs-1])) - np.cat((np.zeros(1),z[:dofs])),
-                np.cat((z[dofs:],2*z[-1])) - np.cat((np.zeros(1),z[dofs:]))
+                np.concatenate((z[:dofs],2*z[dofs-1])) - np.concatenate((np.zeros(1),z[:dofs])),
+                np.cconcatenateat((z[dofs:],2*z[-1])) - np.concatenate((np.zeros(1),z[dofs:]))
                 )
             Cn = nonlinearity.Cn
             Kn = nonlinearity.Kn

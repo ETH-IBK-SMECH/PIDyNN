@@ -1,13 +1,14 @@
 import torch.nn as nn
 from typing import Union
-
+from models.pinn_models import sdof_pinn
 
 def create_model(
         model_type: str,
         input_dim: int,
         hidden_dim: int,
         output_dim: int,
-        seq_len: int
+        seq_len: int,
+        pinn_config: dict={}
 ) -> nn.Module:
     """
     Create a model based on the given model type.
@@ -35,6 +36,8 @@ def create_model(
             nn.Linear(hidden_dim * seq_len, output_dim * seq_len),
             nn.Unflatten(dim=1, unflattened_size=(seq_len, output_dim)),
         )
+    elif model_type == 'sdof_pinn':
+        model = sdof_pinn(input_dim, hidden_dim, output_dim, seq_len, pinn_config)
     else:
         raise NotImplementedError("Specified model type is not implemented.")
 

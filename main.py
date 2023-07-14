@@ -6,6 +6,7 @@ import argparse
 from tqdm import tqdm
 from datasets.create_dataset import create_dataset
 from models.create_model import create_model
+from plotter import Plotter
 
 
 def main(config: argparse.Namespace) -> int:
@@ -67,6 +68,20 @@ def main(config: argparse.Namespace) -> int:
                     optimizer.step()
             print(('\tLoss {}'.format(phase_loss)))
         epoch += 1
+
+    # plot results
+    model.eval()
+
+    # plot last sample of dataset
+    sample = datasets['test'][-1]
+    ground_truth = datasets['test'].dataset.get_original(datasets['test'].indices[-1])
+    inputs = torch.from_numpy(sample[..., 2 * config.n_dof:]).to(device).float().unsqueeze(0)
+    predictions = model(inputs).detach().cpu().squeeze().numpy()
+
+    pinn_plotter = Plotter()
+    test_figure = pinn_plotter.plot_predictions(config.n_dof, sample, predictions, ground_truth)
+    pinn_plotter.show_figure()
+
     return 0
 
 
@@ -87,7 +102,7 @@ if __name__ == '__main__':
     # training arguments
     parser.add_argument('--batch-size', type=int, default=10)
     parser.add_argument('--num-workers', type=int, default=0)
-    parser.add_argument('--num-epochs', type=int, default=100)
+    parser.add_argument('--num-epochs', type=int, default=500)
     parser.add_argument('--sequence-length', type=int, default=100)
     parser.add_argument('--learning-rate', type=float, default=1e-3)
     parser.add_argument('--weight-decay', type=float, default=1e-4)

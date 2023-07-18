@@ -11,10 +11,16 @@ class Plotter:
 
         self.textwidth = textwidth  # cm
         self.fontsize = fontsize  # pts
+
         self.fontpath = os.path.join('plotter', 'fonts', '{}.ttf'.format(fontname))
+        if os.path.exists(self.fontpath):
+            self.prop = font_manager.FontProperties(fname=self.fontpath)
+        else:
+            print('Font path not found, reverting to default font.')
+            self.fontpath = None
+            self.prop = font_manager.FontProperties()
 
         self.fig = plt.figure()
-        self.prop = font_manager.FontProperties(fname=self.fontpath)
         self.prop.set_weight = 'light'
         self.prop.set_size(self.fontsize)
         self.colors = sns.color_palette("tab10", 6)

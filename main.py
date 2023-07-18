@@ -6,7 +6,7 @@ import argparse
 from tqdm import tqdm
 from datasets.create_dataset import create_dataset
 from models.create_model import create_model
-from plotter import Plotter
+from plotter.plotter import Plotter
 
 
 def main(config: argparse.Namespace) -> int:
@@ -78,7 +78,7 @@ def main(config: argparse.Namespace) -> int:
     inputs = torch.from_numpy(sample[..., 2 * config.n_dof:]).to(device).float().unsqueeze(0)
     predictions = model(inputs).detach().cpu().squeeze().numpy()
 
-    pinn_plotter = Plotter()
+    pinn_plotter = Plotter(config.textwidth, config.fontsize, config.fontname)
     test_figure = pinn_plotter.plot_predictions(config.n_dof, sample, predictions, ground_truth)
     pinn_plotter.show_figure()
 
@@ -106,6 +106,11 @@ if __name__ == '__main__':
     parser.add_argument('--sequence-length', type=int, default=100)
     parser.add_argument('--learning-rate', type=float, default=1e-3)
     parser.add_argument('--weight-decay', type=float, default=1e-4)
+
+    # plotting arguments
+    parser.add_argument('--textwidth', type=float, default=32.0)
+    parser.add_argument('--fontsize', type=int, default=10)
+    parser.add_argument('--fontname', type=str, default="times")
 
     args = parser.parse_args()
 

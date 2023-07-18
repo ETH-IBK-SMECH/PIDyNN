@@ -7,11 +7,11 @@ import seaborn as sns
 
 
 class Plotter:
-    def __init__(self):
+    def __init__(self, textwidth, fontsize, fontname):
 
-        self.textwidth = 32.0  # cm
-        self.fontsize = 10  # pts
-        self.fontpath = os.path.join('plotter', 'fonts', 'times.ttf')
+        self.textwidth = textwidth  # cm
+        self.fontsize = fontsize  # pts
+        self.fontpath = os.path.join('plotter', 'fonts', '{}.ttf'.format(fontname))
 
         self.fig = plt.figure()
         self.prop = font_manager.FontProperties(fname=self.fontpath)

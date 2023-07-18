@@ -3,10 +3,8 @@ import matplotlib.gridspec as gridspec
 
 
 class Plotter:
-    def __int__(self):
-        print('hello')
-
-        # TODO need to put all constants for standardized plotting
+    def __init__(self):
+        pass
 
     def plot_predictions(self, n_dof, sample, prediction, ground_truth):
         fig = plt.figure(constrained_layout=True)

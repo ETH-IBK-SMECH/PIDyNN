@@ -21,17 +21,17 @@ def create_dataset(phys_config: dict, sequence_length: int) -> Union[Duffing1DOF
     """
     if phys_config['system-type'] == 'single_dof_duffing':
         example_system = {
-            'mass': 1.0,
-            'stiffness': 1.0,
-            'damping': 0.1,
-            'nonlinear_stiffness': 0.5,
+            'mass': 10.0,
+            'stiffness': 15.0,
+            'damping': 1.0,
+            'nonlinear_stiffness': 100.0,
             'initial_conditions': [0.0, 0.0],
         }
         example_parameters = {
             't_start': 0.0,
-            't_end': 100.0,
-            'dt': 0.01,
-            'downsample': 10,
+            't_end': 120.0,
+            'dt': 120/1024,
+            'downsample': 12,
         }
         dataset = Duffing1DOFOscillator(example_system, example_parameters, seq_len=sequence_length)
     elif phys_config['system-type'] == 'multi_dof_duffing':
@@ -51,9 +51,9 @@ def create_dataset(phys_config: dict, sequence_length: int) -> Union[Duffing1DOF
         }
         example_parameters = {
             't_start': 0.0,
-            't_end': 100.0,
-            'dt': 0.01,
-            'downsample': 10,
+            't_end': 120.0,
+            'dt': 120/1024,
+            'downsample': 12,
         }
         dataset = DuffingMDOFOscillator(example_system, example_parameters, seq_len=sequence_length)
     else:

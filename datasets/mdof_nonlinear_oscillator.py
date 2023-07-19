@@ -24,18 +24,20 @@ class DuffingMDOFOscillator(BaseDataset):
         system.excitations = dynamic_system['excitations']
         solution = system.simulate(t_span, z0=dynamic_system['initial_conditions'])
 
-        # add forcing to dataset
-        data = np.concatenate((solution, t_span.reshape(-1, 1)), axis=1)
+        # add time and forcing to dataset
+        data = np.concatenate((solution, t_span.reshape(-1,1), system.f.T),axis=1)
 
         # normalize data
         self.maximum = data.max(axis=0)
         self.minimum = data.min(axis=0)
+        self.alphas = self.maximum - self.minimum
+        self.alphas[self.alphas==0.0] = 1e12  # to remove division by zero
+        data = (data) / (self.alphas)
         self.downsample = simulation_parameters['downsample']
-        data = (data - self.minimum) / (self.maximum - self.minimum)
 
         # reshape to number of batches
-        # 2 n_dof for state and 1 n_dof for time
-        data = np.reshape(data, [-1, seq_len * self.downsample, 2 * n_dof + 1])
+        # 2 n_dof for state, 1 n_dof for force, and 1 for time
+        data = np.reshape(data, [-1, seq_len * self.downsample, 3 * n_dof + 1])
 
         self.data = data
 

@@ -51,17 +51,13 @@ class sdof_pinn(nn.Module):
             nn.Flatten(start_dim=1),
             nn.Linear(self.n_input * self.seq_len, self.n_hidden * self.seq_len),
             self.activation(),
-            nn.Sequential(*[nn.Sequential(*[nn.Linear(self.n_hidden * self.seq_len, self.n_hidden * self.seq_len), self.activation()]) for _ in range(self.n_layers-1)]),
+            nn.Sequential(*[nn.Sequential(*[
+                nn.Linear(self.n_hidden * self.seq_len, self.n_hidden * self.seq_len),
+                self.activation()
+                ]) for _ in range(self.n_layers-1)]),
             nn.Linear(self.n_hidden * self.seq_len, self.n_output * self.seq_len),
             nn.Unflatten(dim=1, unflattened_size=(self.seq_len, self.n_output))
             )
-        
-        self.flat_net = nn.Sequential(
-            nn.Linear(self.n_input, self.n_hidden),
-            self.activation(),
-            nn.Sequential(*[nn.Sequential(*[nn.Linear(self.n_hidden, self.n_hidden), self.activation()]) for _ in range(self.n_layers-1)]),
-            nn.Linear(self.n_hidden, self.n_output)
-        )
         return 0
     
     def forward(self, t: torch.Tensor, G: torch.Tensor=torch.tensor([0.0]), D: torch.Tensor=torch.tensor([1.0])) -> torch.Tensor:
@@ -73,10 +69,7 @@ class sdof_pinn(nn.Module):
             G: Dirichlet boundary conditions values
             D: Dirichlet boundary conditions mask
         '''
-        if t.shape[1] > 1:
-            x = self.net(t)
-        else:
-            x = self.flat_net(t)
+        x = self.net(t)
         y = G + D * x
         return y
     
@@ -125,7 +118,7 @@ class sdof_pinn(nn.Module):
         self.switches = switches
         return 0
     
-    def loss_func(self, lambdas: dict, t_obs: torch.Tensor, z_obs: torch.Tensor, t_col: torch.Tensor, f_col: torch.Tensor, epoch: int) -> Tuple[float, list, dict]:
+    def loss_func(self, lambdas: dict, t_obs: torch.Tensor, z_obs: torch.Tensor, t_col: torch.Tensor, f_col: torch.Tensor) -> Tuple[float, list, dict]:
         '''
         Calculates the individual losses
 
@@ -147,34 +140,6 @@ class sdof_pinn(nn.Module):
             zp_obs_hat = self.forward(t_obs)
             R_obs = zp_obs_hat.reshape(-1,2) - z_obs.reshape(-1,2)
 
-        # option 1: make first leaf from flattend t vector and roll-pass-unroll then take derivative
-        # if self.switches['ode'] or self.switches['cc']:
-        #     # generate prediction in collocation domain
-        #     def forward_pass_sort(t_col_flat):
-        #         t_col_ = t_col_flat.reshape(t_col.shape[0],t_col.shape[1])
-        #         zp_col_hat_ = self.forward(t_col_)
-        #         return zp_col_hat_.reshape(-1,2)
-        #     t_col_flat = t_col.reshape(-1,1)
-        #     zp_col_hat = forward_pass_sort(t_col_flat)
-
-        #     # set up findiff
-        #     t_col_flat_s, col_sort_ids = torch.sort(t_col_flat[:,0])
-        #     zp_col_hat_s = zp_col_hat[col_sort_ids,:]
-        #     f_col_s = f_col.reshape(-1,1)[col_sort_ids,:]
-        #     dxdt_fd = torch.zeros_like(zp_col_hat)
-        #     dt = t_col_flat_s[1].item() - t_col_flat_s[0].item()
-        #     d_dt = findiff.FinDiff(0,dt)
-
-        #     # retrieve derivatives
-        #     dxdt = torch.zeros_like(zp_col_hat)
-        #     for i in range(zp_col_hat.shape[1]):
-        #         dxdt[:,i] = torch.autograd.grad(zp_col_hat[:,i], t_col_flat, torch.ones_like(zp_col_hat[:,i]), create_graph=True)[0][:,0]
-        #         dxdt_fd[:,i] = torch.tensor(d_dt(zp_col_hat_s[:,i].detach().numpy()))
-            
-        #     # reshape f for loss function
-        #     f_col = f_col.reshape(-1,1)
-
-        # option 2: get jacobian vector of rolled data in each state dimension
         if self.switches['ode'] or self.switches['cc']:
             # generate prediction in collocation domain
             zp_col_hat_ = self.forward(t_col)
@@ -187,25 +152,8 @@ class sdof_pinn(nn.Module):
             # reshape for loss functions
             t_col_flat, col_sort_ids = torch.sort(t_col.reshape(-1))
             zp_col_hat = zp_col_hat_.reshape(-1,2)[col_sort_ids,:]
-            dxdt = dxdt_.reshape(-1,1)[col_sort_ids,:]
+            dxdt = dxdt_.reshape(-1,2)[col_sort_ids,:]
             f_col = f_col.reshape(-1,1)[col_sort_ids,:]
-
-        # option 3: loop through states dimension and then batch dimension
-        # if self.switches['ode'] or self.switches['cc']:
-        #     # generate prediction in collocation domain
-        #     zp_col_hat_ = self.forward(t_col)
-
-        #     # retrieve derivatives
-        #     dxdt_ = torch.zeros_like(zp_col_hat_)
-        #     for i in range(2):
-        #         for b in range(zp_col_hat_.shape[0]):
-        #             dxdt_[b,:,i] = torch.autograd.grad(zp_col_hat_[b,:,i], t_col[b,:], torch.ones_like(zp_col_hat_[b,:,i]), create_graph=True)
-            
-        #     # reshape for loss functions
-        #     t_col_flat, col_sort_ids = torch.sort(t_col.reshape(-1,1))
-        #     zp_col_hat = zp_col_hat.reshape(-1)[col_sort_ids,:]
-        #     dxdt = dxdt_.reshape(-1,1)[col_sort_ids,:]
-        #     f_col = f_col.reshape(-1,1)[col_sort_ids,:]
 
         if self.switches['ode']:
 
@@ -224,21 +172,19 @@ class sdof_pinn(nn.Module):
             match self.config['nonlinearity']:
                 case None:
                     R_ = (self.alpha_z/self.alpha_t)*dxdt.T - A@(self.alpha_z*zp_col_hat.T) - H@(self.alpha_f*f_col.T)
-                    R_ode = R_[1,:].T
+                    R_ode = R_[1,:]
                 case _:
                     zn = self.system.nonlin_state_transform(self.alpha_z*zp_col_hat.T)
                     R_ = (self.alpha_z/self.alpha_t)*dxdt.T - A@(self.alpha_z*zp_col_hat.T) - An@(zn) - H@(self.alpha_f*f_col.T)
-                    R_ode = R_[1,:].T
-                    if epoch > 5000:
-                        print('yo')
+                    R_ode = R_[1,:]
         else:
-            R_ode = torch.zeros((2,1))
+            R_ode = torch.zeros((2))
 
         if self.switches['cc']:
             # continuity condition residual
-            R_cc = R_[0,:].T
+            R_cc = R_[0,:]
         else:
-            R_cc = torch.zeros((2,1))
+            R_cc = torch.zeros((2))
 
         residuals = {
             "R_obs" : R_obs,

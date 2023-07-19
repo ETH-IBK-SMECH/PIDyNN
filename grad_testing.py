@@ -11,15 +11,14 @@ neural_network = nn.Linear(1, 2, False).float()
 
 # t_col = torch.stack([1 / x * torch.arange(T, dtype=float, requires_grad=True) for x in range(1, B+1)]).float()
 t_col = torch.linspace(0,200,1000).reshape(10,100).requires_grad_()
+# shuffle t_col batches to mimic network batching
+t_col = t_col[torch.randperm(10),:]
 zp_col_hat = torch.zeros([B, T, N])
 # zp_col_hat[:, :, 0] = torch.sin(t_col)
 # zp_col_hat[:, :, 1] = torch.cos(t_col)
 zp_col_hat[:, :, 0] = torch.sin(t_col) + torch.cos(2*t_col)
 zp_col_hat[:, :, 1] = torch.cos(t_col) - 2*torch.sin(2*t_col)
 # zp_col_hat = neural_network(t_col.unsqueeze(-1))
-
-# shuffle the batches
-# shuff_ids = torch.randperm()
 
 dxdt_ = torch.zeros_like(zp_col_hat)
 for i in range(zp_col_hat.shape[2]):

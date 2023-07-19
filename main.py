@@ -92,6 +92,8 @@ def main(config: argparse.Namespace) -> int:
                     loss_hist.append([loss_it.item() for loss_it in losses] + [loss.item()])
             
             write_string += '\tLoss {}\n'.format(phase_loss)
+            print(write_string)
+        epoch += 1
 
     # plot results
     model.eval()
@@ -139,10 +141,15 @@ if __name__ == '__main__':
     # training arguments
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--num-workers', type=int, default=0)
-    parser.add_argument('--num-epochs', type=int, default=1000000)
+    parser.add_argument('--num-epochs', type=int, default=100000)
     parser.add_argument('--sequence-length', type=int, default=8)
     parser.add_argument('--learning-rate', type=float, default=2e-3)
     parser.add_argument('--weight-decay', type=float, default=1e-4)
+
+    # plotting arguments
+    parser.add_argument('--textwidth', type=float, default=32.0)
+    parser.add_argument('--fontsize', type=int, default=10)
+    parser.add_argument('--fontname', type=str, default="times")
 
     args = parser.parse_args()
 

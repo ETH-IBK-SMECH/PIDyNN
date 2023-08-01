@@ -1,7 +1,7 @@
 import torch.nn as nn
 from typing import Union
 from models.pinn_models import sdof_pinn
-from models.node import NeuralODE
+from models.node import NeuralODE, SymplecticNeuralODE
 
 
 def create_model(
@@ -40,6 +40,8 @@ def create_model(
         )
     elif model_type == 'NeuralODE':
         model = NeuralODE(input_dim, hidden_dim)
+    elif model_type == 'SymplecticNeuralODE':
+        model = SymplecticNeuralODE(input_dim, hidden_dim)
     elif model_type == 'sdof_pinn':
         model = sdof_pinn(input_dim, hidden_dim, output_dim, seq_len, pinn_config)
     else:

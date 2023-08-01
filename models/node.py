@@ -1,5 +1,5 @@
 import torch.nn as nn
-from torchdiffeq import odeint
+from torchdiffeq.torchdiffeq import odeint
 
 
 class ODEFunc(nn.Module):
@@ -33,4 +33,16 @@ class NeuralODE(nn.Module):
 
     def forward(self, x):
         y, t = x
-        return odeint(self.flow, y, t)[self.k_step_ahead]
+        return odeint(self.flow, y, t, method='rk4')[self.k_step_ahead]
+
+
+class SymplecticNeuralODE(nn.Module):
+    def __init__(self, input_dim, hidden_dim):
+        super(SymplecticNeuralODE, self).__init__()
+
+        self.flow = ODEFunc(input_dim//2, hidden_dim)
+        self.k_step_ahead = 1
+
+    def forward(self, x):
+        y, t = x
+        return odeint(self.flow, y, t, method='yoshida4th')[self.k_step_ahead]

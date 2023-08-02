@@ -30,7 +30,7 @@ class Plotter:
     def cm_to_inch(value: float) -> float:
         return value / 2.54
 
-    def plot_predictions(self, n_dof: int, sample: np.ndarray, prediction: np.ndarray, ground_truth: np.ndarray) -> plt.Figure:
+    def plot_predictions(self, n_dof: int, sample: np.ndarray, prediction: np.ndarray, ground_truth: np.ndarray, t_span: np.ndarray, ground_t_span) -> plt.Figure:
         """
         Plot the predictions for the given data.
 
@@ -39,6 +39,7 @@ class Plotter:
             sample (np.ndarray): Input data sample.
             prediction (np.ndarray): Model predictions.
             ground_truth (np.ndarray): Ground truth data.
+            t_span (np.ndarray): Time vector.
 
         Returns:
             plt.Figure: The generated figure.
@@ -59,9 +60,10 @@ class Plotter:
 
                 plt.xlabel('s', fontproperties=self.prop)
                 channel = 2 * dof + kinetic
-                plt.plot(sample[:, -1], sample[:, channel], linestyle='None', marker='o', label='Data sample', color=self.colors[0])
-                plt.plot(sample[:, -1], prediction[:, channel], label='Predictions', color=self.colors[1])
-                plt.plot(ground_truth[:, -1], ground_truth[:, channel], label='Ground truth', color=self.colors[2])
+                plt.plot(t_span, sample[:, channel], linestyle='None', marker='o', label='Data sample', color=self.colors[0])
+                plt.plot(t_span[1:], prediction[:, channel], label='Predictions', color=self.colors[1])
+                plt.plot(ground_t_span, ground_truth[:, channel], label='Ground truth', color=self.colors[2])
+                plt.xlim([ground_t_span.min(), ground_t_span.max()])
                 plt.xticks(fontproperties=self.prop)
                 plt.yticks(fontproperties=self.prop)
 

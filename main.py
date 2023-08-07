@@ -21,9 +21,9 @@ def main(config: argparse.Namespace) -> int:
     }
     phases = ['train', 'val', 'test']
     full_dataset = create_dataset(phys_config, config.sequence_length)
-    train_size = int(0.8 * len(full_dataset))  # training size in number of batches
-    val_size = int(0.1 * len(full_dataset))  # validation size in number of batches
-    test_size = int(0.1 * len(full_dataset))  # testing size in number of batches
+    train_size = 0.8
+    val_size = 0.1
+    test_size = 0.1
     train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(full_dataset,
                                                                              [train_size, val_size, test_size])
     datasets = {

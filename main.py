@@ -4,6 +4,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import argparse
 from tqdm import tqdm
+from tqdm.auto import tqdm as tqdma
 from datasets.create_dataset import create_dataset
 from models.create_model import create_model
 from models.pinn_models import ParamClipper
@@ -20,9 +21,9 @@ def main(config: argparse.Namespace) -> int:
     }
     phases = ['train', 'val', 'test']
     full_dataset = create_dataset(phys_config, config.sequence_length)
-    train_size = int(0.75 * len(full_dataset))  # training size in number of batches
-    val_size = int(0.125 * len(full_dataset))  # validation size in number of batches
-    test_size = int(0.125 * len(full_dataset))  # testing size in number of batches
+    train_size = int(1.0 * len(full_dataset))  # training size in number of batches
+    val_size = int(0 * len(full_dataset))  # validation size in number of batches
+    test_size = int(0 * len(full_dataset))  # testing size in number of batches
     train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(full_dataset, [train_size, val_size, test_size])
     datasets = {
         'train': train_dataset,
@@ -71,7 +72,6 @@ def main(config: argparse.Namespace) -> int:
             else:
                 model.eval()
             for i, sample in enumerate(dataloaders[phase]):
-                # This data parsing is specific to the dummy example and will have to be changed
                 targets = sample[..., :2*config.n_dof].to(device).float().requires_grad_()
                 inputs = sample[..., 2*config.n_dof].to(device).float().requires_grad_()
                 force = sample[..., 2*config.n_dof+1:].to(device).float().requires_grad_()
@@ -84,26 +84,43 @@ def main(config: argparse.Namespace) -> int:
                     loss.backward()
                     optimizer.step()
                     model.apply(clipper)
-                    if config.system_discovery:
-                        write_string += '\tSystem Parameters:\tc - {:.4f}\tk - {:.4f}\tkn - {:.4f}\n'.format(model.c_[0,0].item(),model.k_[0,0].item(),model.kn_[0,0].item())
                     loss_hist.append([loss_it.item() for loss_it in losses] + [loss.item()])
-                    if config.system_discovery:
-                        print('\tSystem Parameters:\tc - {:.4f}\tk - {:.4f}\tkn - {:.4f}\n'.format(model.c_[0,0].item(),model.k_[0,0].item(),model.kn_[0,0].item()))
-                    loss_hist.append([loss_it.item() for loss_it in losses] + [loss.item()])
+            if phase == 'train':
+                if config.system_discovery:
+                    write_string += '\tSystem Parameters:\tc - {:.4f} [{:.2f}]\tk - {:.4f} [{:.2f}]\tkn - {:.4f} [{:.2f}]\n'.format(
+                        model.c_[0,0].item()*pinn_config['param_norms']['c'],
+                        config.c_[0,0].item(),
+                        model.k_[0,0].item()*pinn_config['param_norms']['k'],
+                        config.k_[0,0].item(),
+                        model.kn_[0,0].item()*pinn_config['param_norms']['kn'],
+                        config.kn_[0,0].item())
             
             write_string += '\tLoss {}\n'.format(phase_loss)
+            tqdma.write(write_string)
 
     # plot results
     model.eval()
 
-    # plot last sample of dataset
-    sample = datasets['test'][-1]
-    ground_truth = datasets['test'].dataset.get_original(datasets['test'].indices[-1])
-    inputs = torch.from_numpy(sample[..., 2 * config.n_dof:]).to(device).float().unsqueeze(0)
-    predictions = model(inputs).detach().cpu().squeeze().numpy()
+    # plot all samples of dataset
+    # generate and collate all samples to full time window
+    inputs_all = torch.zeros((config.batch_size * config.sequence_length, 1)).numpy()
+    predictions_all = torch.zeros((config.batch_size * config.sequence_length, 2 * config.n_dof)).numpy()
+    gt_all = torch.zeros((config.batch_size * config.sequence_length, 3 * config.n_dof + 1)).numpy()
+    samples_all = torch.zeros((config.batch_size * config.sequence_length, 3 * config.n_dof + 1)).numpy()
+    for i, sample in enumerate(datasets['train']):
+        samples_all[i*config.sequence_length:(i+1)*config.sequence_length] = sample
+        gt_all[i*config.sequence_length:(i+1)*config.sequence_length,:] = datasets['train'].dataset.get_original(datasets['train'].indices[i])
+        inputs = torch.from_numpy(sample[..., 2*config.n_dof]).to(device).float().unsqueeze(0)
+        inputs_all[i*config.sequence_length:(i+1)*config.sequence_length] = inputs.T.numpy()
+        predictions_all[i*config.sequence_length:(i+1)*config.sequence_length] = model(inputs).detach().cpu().squeeze().numpy()
+    includes = {
+        "gt" : config.include_gt,
+        "pred" : config.include_pred,
+        "obs" : config.include_obs
+    }
 
-    pinn_plotter = Plotter(config.textwidth, config.fontsize, config.fontname)
-    test_figure = pinn_plotter.plot_predictions(config.n_dof, sample, predictions, ground_truth)
+    pinn_plotter = Plotter(config.textwidth, config.fontsize, config.fontname, config.fig_ratio, includes)
+    test_figure = pinn_plotter.plot_predictions(config.n_dof, samples_all, predictions_all, gt_all)
     pinn_plotter.show_figure()
 
     return 0
@@ -120,15 +137,15 @@ if __name__ == '__main__':
     # nn-model arguments
     parser.add_argument('--model-type', type=str, default='sdof_pinn')
     parser.add_argument('--in-channels', type=int, default=1)
-    parser.add_argument('--latent-features', type=int, default=8)
+    parser.add_argument('--latent-features', type=int, default=32)
     parser.add_argument('--out-channels', type=int, default=2)
 
     # pinn arguments
     parser.add_argument('--phys-system-type', type=str, default='duffing_sdof')
     parser.add_argument('--lambdas', type=dict, default={
-        'obs' : 5.0,
-        'cc' : 10.0,
-        'ode' : 5.0
+        'obs' : 1.0,
+        'cc' : 1.0,
+        'ode' : 1.0
     })
     parser.add_argument('--system-discovery', type=bool, default=True)
     parser.add_argument('--m-', type=torch.Tensor, default=torch.Tensor([[10.0]]))
@@ -137,12 +154,21 @@ if __name__ == '__main__':
     parser.add_argument('--kn-', type=torch.Tensor, default=torch.Tensor([[100.0]]))
 
     # training arguments
-    parser.add_argument('--batch-size', type=int, default=128)
+    parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--num-workers', type=int, default=0)
-    parser.add_argument('--num-epochs', type=int, default=1000000)
+    parser.add_argument('--num-epochs', type=int, default=200000)
     parser.add_argument('--sequence-length', type=int, default=8)
-    parser.add_argument('--learning-rate', type=float, default=2e-3)
+    parser.add_argument('--learning-rate', type=float, default=1e-4)
     parser.add_argument('--weight-decay', type=float, default=1e-4)
+
+    # plotting arguments
+    parser.add_argument('--textwidth', type=float, default=14.4)
+    parser.add_argument('--fontsize', type=int, default=12)
+    parser.add_argument('--fontname', type=str, default="cmunrm")
+    parser.add_argument('--fig-ratio', type=float, default=12/16)
+    parser.add_argument('--include-gt', type=bool, default=True)
+    parser.add_argument('--include-pred', type=bool, default=True)
+    parser.add_argument('--include-obs', type=bool, default=False)
 
     args = parser.parse_args()
 

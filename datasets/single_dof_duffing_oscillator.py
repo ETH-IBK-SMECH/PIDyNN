@@ -62,21 +62,24 @@ class Duffing1DOFOscillator(BaseDataset):
         data = np.concatenate([solution, t_span.reshape(-1,1), external_force], axis=1)
 
         # normalize data
-        # self.maximum = data.max(axis=0)
         self.maximum = np.max(np.abs(data), axis=0)
-        # self.minimum = data.min(axis=0)
         self.minimum = np.min(np.abs(data), axis=0)
+        self.downsample = simulation_parameters['downsample']
         self.alphas = self.maximum# - self.minimum
         self.alphas[self.alphas==0.0] = 1e12 # to remove division by zero
         data = (data) / (self.alphas)
+        # save ground truth before sub_sampling
+        self.ground_truth = data
 
         # reshape to number of batches
         # 2 n_dof for state, 1 n_dof for force and 1 for time
-        data = np.reshape(data, [-1, seq_len, 3*n_dof+1])
-
+        data = np.reshape(data, [-1, seq_len, 3 * n_dof + 1])
         self.data = data
 
     def __getitem__(self, index: int) -> np.ndarray:
+        return self.data[index, ::self.downsample]
+
+    def get_original(self, index: int) -> np.ndarray:
         return self.data[index]
 
     def __len__(self) -> int:
@@ -101,6 +104,7 @@ if __name__ == '__main__':
         't_start': 0.0,
         't_end': 120.0,
         'dt': 120/1024,
+        'downsample' : 4
     }
 
     dataset = Duffing1DOFOscillator(example_system, example_parameters, seq_len=128)

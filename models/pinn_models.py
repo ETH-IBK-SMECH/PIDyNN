@@ -3,7 +3,6 @@ import torch.nn as nn
 import models.pinn_systems as systems
 import models.pinn_nonlinearities as nonlinearities
 from typing import Tuple
-import findiff
 
 class ParamClipper(object):
 
@@ -36,7 +35,7 @@ class sdof_pinn(nn.Module):
         self.n_output = output_dim
         self.n_hidden = hidden_dim
         self.seq_len = seq_len
-        self.n_layers = 2  # arbitrarily set for now
+        self.n_layers = 4  # arbitrarily set for now
         self.activation = nn.Tanh
 
         self.build_net()

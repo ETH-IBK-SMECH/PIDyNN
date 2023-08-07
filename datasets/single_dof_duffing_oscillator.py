@@ -70,6 +70,7 @@ class Duffing1DOFOscillator(BaseDataset):
 
         # reshape to number of batches
         # 2 n_dof for state and 1 n_dof for time
+        data = data[:(data.shape[0] // (seq_len * self.downsample)) * (seq_len * self.downsample)] # cut off excess data
         data = np.reshape(data, [-1, seq_len*self.downsample, 2 * n_dof + 1])
         self.data = data
 

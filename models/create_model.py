@@ -1,6 +1,7 @@
 import torch.nn as nn
 from typing import Union
 from models.pinn_models import sdof_pinn
+from models.pgnn_models import PGNN
 from models.node import NeuralODE, SymplecticNeuralODE
 
 
@@ -44,6 +45,8 @@ def create_model(
         model = SymplecticNeuralODE(input_dim, hidden_dim)
     elif model_type == 'sdof_pinn':
         model = sdof_pinn(input_dim, hidden_dim, output_dim, seq_len, pinn_config)
+    elif model_type == 'PGNN':
+        model = PGNN(input_dim, hidden_dim, output_dim)
     else:
         raise NotImplementedError("Specified model type is not implemented.")
 

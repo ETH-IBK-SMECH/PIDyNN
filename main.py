@@ -90,6 +90,9 @@ def main(config: argparse.Namespace) -> int:
                     case 'k_plus_1':
                         inputs = (state[:, :-1], t_span[0, :-1] - t_span[0, :-1].min())  # ODE only needs relative time, possible work-arounds here: https://github.com/rtqichen/torchdiffeq/issues/122
                         targets = state[:, 1:]
+                    case 'pgnn':
+                        inputs = state[:, :-1]
+                        targets = state[:, 1:]
                     case _:
                         raise NotImplementedError
 
@@ -130,7 +133,11 @@ def main(config: argparse.Namespace) -> int:
              datasets['test'].dataset.minimum[2 * config.n_dof]
     t_span = t_span[0] - t_span[0].min()
     ground_t_span = ground_t_span[0] - ground_t_span[0].min()
-    input_tensor = [inputs, t_span]
+    match config.task:
+        case 'regression' | 'k_plus_1':
+            input_tensor = [inputs, t_span]
+        case 'pgnn':
+            input_tensor = inputs
     predictions = model(input_tensor).detach().cpu().squeeze().numpy()
 
     pinn_plotter = Plotter(config.textwidth, config.fontsize, config.fontname)
@@ -149,7 +156,7 @@ if __name__ == '__main__':
     parser.add_argument('--system-type', type=str, default='single_dof_duffing')
 
     # nn-model arguments
-    parser.add_argument('--model-type', type=str, default='NeuralODE')
+    parser.add_argument('--model-type', type=str, default='PGNN')
     parser.add_argument('--in-channels', type=int, default=2)
     parser.add_argument('--latent-features', type=int, default=32)
     parser.add_argument('--out-channels', type=int, default=2)
@@ -168,11 +175,11 @@ if __name__ == '__main__':
     parser.add_argument('--kn-', type=torch.Tensor, default=torch.Tensor([[100.0]]))
 
     # training arguments
-    parser.add_argument('--task', type=str, default="k_plus_1")
+    parser.add_argument('--task', type=str, default="pgnn")
     parser.add_argument('--batch-size', type=int, default=256)
     parser.add_argument('--num-workers', type=int, default=0)
     parser.add_argument('--num-epochs', type=int, default=150)
-    parser.add_argument('--sequence-length', type=int, default=500)
+    parser.add_argument('--sequence-length', type=int, default=100)
     parser.add_argument('--learning-rate', type=float, default=2e-3)
     parser.add_argument('--weight-decay', type=float, default=1e-4)
 

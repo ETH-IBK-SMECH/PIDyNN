@@ -34,8 +34,7 @@ class Duffing1DOFOscillator(BaseDataset):
         print('Simulating 1DOF Duffing oscillator...')
 
         n_dof = 1
-        t_span = np.arange(simulation_parameters['t_start'], simulation_parameters['t_end'],
-                           simulation_parameters['dt'])
+        t_span = np.arange(simulation_parameters['t_start'], simulation_parameters['t_end'], simulation_parameters['dt'])
         external_force = np.random.normal(0, 1, [len(t_span), 1])
         freqs = np.array([0.7, 0.85, 1.6, 1.8])
         np.random.seed(43810)
@@ -66,12 +65,16 @@ class Duffing1DOFOscillator(BaseDataset):
         self.maximum = data.max(axis=0)
         self.minimum = data.min(axis=0)
         self.downsample = simulation_parameters['downsample']
-        data = (data - self.minimum) / (self.maximum - self.minimum)
+        self.alphas = self.maximum
+        self.alphas[self.alphas==0.0] = 1e12 # to remove division by zero
+        data = (data) / (self.alphas)
+        # save ground truth before sub_sampling
+        self.ground_truth = data
 
         # reshape to number of batches
-        # 2 n_dof for state and 1 n_dof for time
+        # 2 n_dof for state, 1 for time and 1 n_dof for force
         data = data[:(data.shape[0] // (seq_len * self.downsample)) * (seq_len * self.downsample)] # cut off excess data
-        data = np.reshape(data, [-1, seq_len*self.downsample, 2 * n_dof + 1])
+        data = np.reshape(data, [-1, seq_len*self.downsample, 3 * n_dof + 1])
         self.data = data
 
     def __getitem__(self, index: int) -> np.ndarray:

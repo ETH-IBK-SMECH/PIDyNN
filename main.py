@@ -4,9 +4,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import argparse
 from tqdm import tqdm
+from tqdm.auto import tqdm as tqdma
 from datasets.create_dataset import create_dataset
 from models.create_model import create_model
-from models.pinn_models import ParamClipper
 from plotter.plotter import Plotter
 
 
@@ -54,10 +54,11 @@ def main(config: argparse.Namespace) -> int:
             'kn': 10.0
         }
     }
-    model = create_model(config.model_type, config.in_channels, config.latent_features, config.out_channels,
-                         config.sequence_length, pinn_config)
+    
+    model = create_model(config.model_type, config.in_channels, config.latent_features, config.out_channels, config.sequence_length, pinn_config)
     criterion = nn.MSELoss(reduction='sum')
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
+    model.set_switches(config.lambdas)
 
     # Training loop
     epoch = 0
@@ -75,19 +76,17 @@ def main(config: argparse.Namespace) -> int:
                 model.eval()
             for i, sample in enumerate(dataloaders[phase]):
                 # parse data sample
-                state = sample[..., :2 * config.n_dof].to(device).float()
-                force = sample[..., 2 * config.n_dof + 1:].to(device).float()
-                t_span = sample[:, :, 2 * config.n_dof].to(device).float()
-
-                # unnormalize time component
-                t_span = t_span * (datasets[phase].dataset.maximum[2 * config.n_dof] - datasets[phase].dataset.minimum[2 * config.n_dof]) + datasets[phase].dataset.minimum[2 * config.n_dof]
+                state = sample[..., :2*config.n_dof].to(device).float().requires_grad_()
+                t_span = sample[..., 2*config.n_dof].to(device).float().requires_grad_()
+                force = sample[..., 2*config.n_dof+1:].to(device).float().requires_grad_()
 
                 # switch according to task
                 match config.task:
-                    case 'regression':
+                    case 'instance':
                         inputs = t_span
                         targets = state
                     case 'k_plus_1':
+                        t_span = t_span * full_dataset.alphas[2*config.n_dof]
                         inputs = (state[:, :-1], t_span[0, :-1] - t_span[0, :-1].min())  # ODE only needs relative time, possible work-arounds here: https://github.com/rtqichen/torchdiffeq/issues/122
                         targets = state[:, 1:]
                     case 'pgnn':
@@ -98,18 +97,35 @@ def main(config: argparse.Namespace) -> int:
 
                 if phase == 'train':
                     optimizer.zero_grad()
-                predictions = model(inputs)
-                loss = criterion(predictions, targets)
+                match config.task:
+                    case 'instance':
+                        loss, losses, _ = model.loss_func(config.lambdas, inputs, targets, inputs, force)
+                    case 'k_plus_1' | 'pgnn':
+                        predictions = model(inputs)
+                        loss = criterion(predictions, targets)
 
                 phase_loss += loss.item()
                 if phase == 'train':
                     loss.backward()
                     optimizer.step()
-
+                    match config.task:
+                        case 'instance':
+                            loss_hist.append([loss_it.item() for loss_it in losses] + [loss.item()])
+                        case 'k_plus_1' | 'pgnn':
+                            loss_hist.append(loss.item())
+            if phase == 'train':
+                if config.system_discovery:
+                    write_string += '\tSystem Parameters:\tc - {:.4f} [{:.2f}]\tk - {:.4f} [{:.2f}]\tkn - {:.4f} [{:.2f}]\n'.format(
+                        model.c_[0,0].item()*pinn_config['param_norms']['c'],
+                        config.c_[0,0].item(),
+                        model.k_[0,0].item()*pinn_config['param_norms']['k'],
+                        config.k_[0,0].item(),
+                        model.kn_[0,0].item()*pinn_config['param_norms']['kn'],
+                        config.kn_[0,0].item())
+            
             write_string += '\tLoss {}\n'.format(phase_loss)
 
-        # Uncomment this line if you want to keep track of the loss (preferably deactivate progress bar before that)
-        #print(write_string)
+        tqdma.write(write_string)
         epoch += 1
         progress_bar.update(1)
 
@@ -118,30 +134,63 @@ def main(config: argparse.Namespace) -> int:
     # plot results
     model.eval()
 
-    # plot last sample of dataset
-    sample = datasets['test'][-1]
-
-    ground_truth = datasets['test'].dataset.get_original(datasets['test'].indices[-1])
-    inputs = torch.from_numpy(sample[:-1, :2 * config.n_dof]).to(device).float().unsqueeze(0)
-    t_span = torch.from_numpy(sample[:, 2 * config.n_dof]).to(device).float().unsqueeze(0)
-    ground_t_span = torch.from_numpy(ground_truth[:, 2 * config.n_dof]).to(device).float().unsqueeze(0)
-    t_span = t_span * (
-            datasets['test'].dataset.maximum[2 * config.n_dof] - datasets['test'].dataset.minimum[2 * config.n_dof]) + \
-             datasets['test'].dataset.minimum[2 * config.n_dof]
-    ground_t_span = ground_t_span * (
-            datasets['test'].dataset.maximum[2 * config.n_dof] - datasets['test'].dataset.minimum[2 * config.n_dof]) + \
-             datasets['test'].dataset.minimum[2 * config.n_dof]
-    t_span = t_span[0] - t_span[0].min()
-    ground_t_span = ground_t_span[0] - ground_t_span[0].min()
+    # plot all samples of dataset
+    # generate and collate all samples to full time window
+    num_obs_samps = len(datasets['train']) * config.sequence_length  # total number of observation points
+    num_col_samps = len(datasets['train']) * config.sequence_length  # total number of collocation points (currently the same as observation, will be updated with collocation dataset update)
     match config.task:
-        case 'regression' | 'k_plus_1':
-            input_tensor = [inputs, t_span]
-        case 'pgnn':
-            input_tensor = inputs
-    predictions = model(input_tensor).detach().cpu().squeeze().numpy()
+        case 'instance':
+            t_span_obs = torch.zeros((num_obs_samps)).numpy()  # time vector for observation domain
+            obs_state = torch.zeros((num_obs_samps, 2 * config.n_dof))  # all state observations
+            t_span_gt = torch.zeros((num_col_samps)).numpy()  # time vector for gt/prediction domain
+            ground_truth = torch.zeros((num_obs_samps, 3 * config.n_dof + 1)).numpy()  # all data for gound truth (state, time, force)
+            predictions = torch.zeros((num_col_samps, 2 * config.n_dof)).numpy()  # all state predictions (same as collocation domain)
 
-    pinn_plotter = Plotter(config.textwidth, config.fontsize, config.fontname)
-    test_figure = pinn_plotter.plot_predictions(config.n_dof, sample, predictions, ground_truth, t_span, ground_t_span)
+            for i, sample in enumerate(datasets['train']):
+                inpoint = i*config.sequence_length
+                outpoint = (i+1)*config.sequence_length
+
+                obs_inputs = torch.from_numpy(sample[..., 2*config.n_dof]).to(device).float().unsqueeze(0)
+                t_span_obs[inpoint:outpoint] = obs_inputs.T.numpy().squeeze()
+                obs_state[inpoint:outpoint,:] = torch.from_numpy(sample[..., :2*config.n_dof]).float().unsqueeze(0)
+
+                ground_truth[inpoint:outpoint,:] = datasets['train'].dataset.get_original(datasets['train'].indices[i])
+                pred_inputs = torch.from_numpy(sample[..., 2*config.n_dof]).to(device).float().unsqueeze(0)
+                t_span_gt[inpoint:outpoint] = ground_truth[inpoint:outpoint, 2*config.n_dof].reshape(-1)
+                predictions[inpoint:outpoint,:] = model(pred_inputs).detach().cpu().squeeze().numpy()
+
+        case 'k_plus_1' | 'pgnn':
+            t_span_obs = torch.zeros((num_obs_samps-1, 1)).numpy()  # time vector for observation domain
+            obs_state = torch.zeros((num_obs_samps-1, 2 * config.n_dof)).numpy()  # all state observations
+            t_span_gt = torch.zeros((num_col_samps, 1)).numpy()  # time vector for gt/prediction domain
+            ground_truth = torch.zeros((num_col_samps, 3 * config.n_dof + 1)).numpy()  # all ground truth data (state, time, force)
+            predictions = torch.zeros((num_obs_samps - 1, 2 * config.n_dof)).numpy()  # predictions at observations (states)
+
+            for i, sample in enumerate(datasets['train']):
+                inpoint = i*config.sequence_length
+                outpoint = (i+1)*config.sequence_length
+                t_span_obs[inpoint:outpoint] = torch.from_numpy(sample[1:, 2 * config.n_dof])
+                obs_state[inpoint:outpoint,:] = torch.from_numpy(sample[1:, :2 * config.n_dof])
+
+                gt_data = datasets['train'].get_original(datasets['train'].indices[i])
+                t_span = gt_data[:, :, 2 * config.n_dof].to(device).float()
+                if config.task == 'k_plus_1':
+                    pred_input = (gt_data[:, :-1, :2*config.n_dof].to(device).float(),
+                                t_span[0, :-1] - t_span[0, :-1].min())
+                elif config.task == 'pgnn':
+                    pred_input = gt_data[:, :-1, :2*config.n_dof].to(device).float()
+                predictions[inpoint:outpoint,:] = model(pred_input).detach().cpu().squeeze().numpy()
+                ground_truth[inpoint:outpoint,:] = datasets['train'].get_original(datasets['train'].indices[i])
+                t_span_gt[inpoint:outpoint] = ground_truth[inpoint:outpoint,2*config.n_dof]
+
+    includes = {
+        "gt" : config.include_gt,
+        "pred" : config.include_pred,
+        "obs" : config.include_obs
+    }
+
+    pinn_plotter = Plotter(config.textwidth, config.fontsize, config.fontname, config.fig_ratio, includes)
+    test_figure = pinn_plotter.plot_predictions(config.n_dof, t_span_obs, obs_state, t_span_gt, predictions, ground_truth, config.task)
     pinn_plotter.show_figure()
 
     return 0
@@ -156,17 +205,17 @@ if __name__ == '__main__':
     parser.add_argument('--system-type', type=str, default='single_dof_duffing')
 
     # nn-model arguments
-    parser.add_argument('--model-type', type=str, default='PGNN')
-    parser.add_argument('--in-channels', type=int, default=2)
+    parser.add_argument('--model-type', type=str, default='sdof_pinn')
+    parser.add_argument('--in-channels', type=int, default=1)
     parser.add_argument('--latent-features', type=int, default=32)
     parser.add_argument('--out-channels', type=int, default=2)
 
     # pinn arguments
     parser.add_argument('--phys-system-type', type=str, default='duffing_sdof')
     parser.add_argument('--lambdas', type=dict, default={
-        'obs': 5.0,
-        'cc': 10.0,
-        'ode': 5.0
+        'obs' : 1.0,
+        'cc' : 1.0,
+        'ode' : 1.0
     })
     parser.add_argument('--system-discovery', type=bool, default=True)
     parser.add_argument('--m-', type=torch.Tensor, default=torch.Tensor([[10.0]]))
@@ -175,18 +224,22 @@ if __name__ == '__main__':
     parser.add_argument('--kn-', type=torch.Tensor, default=torch.Tensor([[100.0]]))
 
     # training arguments
-    parser.add_argument('--task', type=str, default="pgnn")
-    parser.add_argument('--batch-size', type=int, default=256)
+    parser.add_argument('--task', type=str, default="instance")
+    parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--num-workers', type=int, default=0)
-    parser.add_argument('--num-epochs', type=int, default=150)
-    parser.add_argument('--sequence-length', type=int, default=100)
-    parser.add_argument('--learning-rate', type=float, default=2e-3)
+    parser.add_argument('--num-epochs', type=int, default=200000)
+    parser.add_argument('--sequence-length', type=int, default=8)
+    parser.add_argument('--learning-rate', type=float, default=1e-4)
     parser.add_argument('--weight-decay', type=float, default=1e-4)
 
     # plotting arguments
-    parser.add_argument('--textwidth', type=float, default=32.0)
-    parser.add_argument('--fontsize', type=int, default=10)
-    parser.add_argument('--fontname', type=str, default="times")
+    parser.add_argument('--textwidth', type=float, default=14.4)
+    parser.add_argument('--fontsize', type=int, default=12)
+    parser.add_argument('--fontname', type=str, default="cmunrm")
+    parser.add_argument('--fig-ratio', type=float, default=12/16)
+    parser.add_argument('--include-gt', type=bool, default=True)
+    parser.add_argument('--include-pred', type=bool, default=True)
+    parser.add_argument('--include-obs', type=bool, default=True)
 
     args = parser.parse_args()
 

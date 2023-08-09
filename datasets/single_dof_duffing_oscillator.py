@@ -39,8 +39,8 @@ class Duffing1DOFOscillator(BaseDataset):
         freqs = np.array([0.7, 0.85, 1.6, 1.8])
         np.random.seed(43810)
         phases = np.random.rand(freqs.shape[0], 1)
-        F_mat = np.sin(t_span.reshape(-1,1) @ freqs.reshape(1,-1) + phases.T)
-        Sx = np.ones((4,1))
+        F_mat = np.sin(t_span.reshape(-1, 1) @ freqs.reshape(1, -1) + phases.T)
+        Sx = np.ones((4, 1))
         external_force = F_mat @ Sx
         fint = interp1d(t_span, external_force[:, 0], fill_value='extrapolate')
 
@@ -58,12 +58,12 @@ class Duffing1DOFOscillator(BaseDataset):
             )
         )
 
-        # add time and forcing to dataset
-        data = np.concatenate([solution, t_span.reshape(-1,1), external_force], axis=1)
+        # add forcing to dataset
+        data = np.concatenate([solution, t_span.reshape(-1, 1)], axis=1)
 
         # normalize data
-        self.maximum = np.max(np.abs(data), axis=0)
-        self.minimum = np.min(np.abs(data), axis=0)
+        self.maximum = data.max(axis=0)
+        self.minimum = data.min(axis=0)
         self.downsample = simulation_parameters['downsample']
         self.alphas = self.maximum
         self.alphas[self.alphas==0.0] = 1e12 # to remove division by zero
@@ -72,8 +72,9 @@ class Duffing1DOFOscillator(BaseDataset):
         self.ground_truth = data
 
         # reshape to number of batches
-        # 2 n_dof for state, 1 n_dof for force and 1 for time
-        data = np.reshape(data, [-1, seq_len, 3 * n_dof + 1])
+        # 2 n_dof for state, 1 for time and 1 n_dof for force
+        data = data[:(data.shape[0] // (seq_len * self.downsample)) * (seq_len * self.downsample)] # cut off excess data
+        data = np.reshape(data, [-1, seq_len*self.downsample, 3 * n_dof + 1])
         self.data = data
 
     def __getitem__(self, index: int) -> np.ndarray:
@@ -103,19 +104,20 @@ if __name__ == '__main__':
     example_parameters: dict = {
         't_start': 0.0,
         't_end': 120.0,
-        'dt': 120/1024,
-        'downsample' : 12,
+        'dt': 120 / 1024,
+        'downsample': 12,
     }
 
     dataset = Duffing1DOFOscillator(example_system, example_parameters, seq_len=128)
 
-    x = dataset[:,:,0].reshape(-1)
-    v = dataset[:,:,1].reshape(-1)
-    t = dataset[:,:,2].reshape(-1)
-    f = dataset[:,:,3].reshape(-1)
+    x = dataset[:, :, 0].reshape(-1)
+    v = dataset[:, :, 1].reshape(-1)
+    t = dataset[:, :, 2].reshape(-1)
+    f = dataset[:, :, 3].reshape(-1)
 
     import matplotlib.pyplot as plt
-    fig, axs = plt.subplots(3,1, figsize=(12,12))
+
+    fig, axs = plt.subplots(3, 1, figsize=(12, 12))
     axs[0].plot(t, x)
     axs[1].plot(t, v)
     axs[2].plot(t, f)

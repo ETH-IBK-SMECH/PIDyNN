@@ -9,46 +9,49 @@ from datasets.create_dataset import create_dataset
 from models.create_model import create_model
 from plotter.plotter import Plotter
 
+
 def main(config: argparse.Namespace) -> int:
     torch.manual_seed(42)
     device = torch.device('cpu')
 
     # Create dataset
     phys_config = {
-        'n_dof' : config.n_dof,
-        'system-type' : config.system_type
+        'n_dof': config.n_dof,
+        'system-type': config.system_type
     }
     phases = ['train', 'val', 'test']
     full_dataset = create_dataset(phys_config, config.sequence_length)
-    train_size = 0.8  # training size in number of batches
-    val_size = 0.1  # validation size in number of batches
-    test_size = 0.1  # testing size in number of batches
-    train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(full_dataset,[train_size, val_size, test_size])
+    train_size = 0.8
+    val_size = 0.1
+    test_size = 0.1
+    train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(full_dataset,
+                                                                             [train_size, val_size, test_size])
     datasets = {
         'train': train_dataset,
         'val': val_dataset,
         'test': test_dataset
     }
     dataloaders = {
-        x: DataLoader(dataset=datasets[x], batch_size=config.batch_size, shuffle=True if x == 'train' else False, num_workers=config.num_workers, pin_memory=True) for x in phases}
+        x: DataLoader(dataset=datasets[x], batch_size=config.batch_size, shuffle=True if x == 'train' else False,
+                      num_workers=config.num_workers, pin_memory=True) for x in phases}
 
     # Create model
-    if config.out_channels != 2*config.n_dof:
+    if config.out_channels != 2 * config.n_dof:
         raise Exception("Number of network outputs does not match state vector of simulated model")
     pinn_config = {
-        'n_dof' : config.n_dof,
-        'phys_system_type' : config.phys_system_type,
-        'system_discovery' : config.system_discovery,
-        'm_' : config.m_,
-        'c_' : config.c_,
-        'k_' : config.k_,
-        'kn_' : config.kn_,
-        'alphas' : full_dataset.alphas,
-        'param_norms' : {
-            'm' : 1.0,
-            'c' : 1.0,
-            'k' : 10.0,
-            'kn' : 10.0
+        'n_dof': config.n_dof,
+        'phys_system_type': config.phys_system_type,
+        'system_discovery': config.system_discovery,
+        'm_': config.m_,
+        'c_': config.c_,
+        'k_': config.k_,
+        'kn_': config.kn_,
+        'alphas': None,
+        'param_norms': {
+            'm': 1.0,
+            'c': 1.0,
+            'k': 10.0,
+            'kn': 10.0
         }
     }
     model = create_model(config.model_type, config.in_channels, config.latent_features, config.out_channels, config.sequence_length, pinn_config)
@@ -56,7 +59,6 @@ def main(config: argparse.Namespace) -> int:
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
     model.set_switches(config.lambdas)
 
-    loss_hist = []
     # Training loop
     epoch = 0
     model = model.to(device)
@@ -100,6 +102,7 @@ def main(config: argparse.Namespace) -> int:
                     case 'k_plus_1' | 'pgnn':
                         predictions = model(inputs)
                         loss = criterion(predictions, targets)
+
                 phase_loss += loss.item()
                 if phase == 'train':
                     loss.backward()

@@ -32,13 +32,14 @@ class DuffingMDOFOscillator(BaseDataset):
         self.minimum = data.min(axis=0)
         self.alphas = self.maximum - self.minimum
         self.alphas[self.alphas==0.0] = 1e12  # to remove division by zero
-        data = (data) / (self.alphas)
+        #data = (data) / (self.alphas)
+        data = (data - self.minimum) / (self.maximum - self.minimum)
         self.downsample = simulation_parameters['downsample']
 
         # reshape to number of batches
         # 2 n_dof for state, 1 n_dof for force, and 1 for time
-        data = np.reshape(data, [-1, seq_len * self.downsample, 3 * n_dof + 1])
-
+        data = data[:(data.shape[0] // (seq_len * self.downsample)) * (seq_len * self.downsample)]  # cut off excess data
+        data = np.reshape(data, [-1, seq_len*self.downsample, 3 * n_dof + 1])
         self.data = data
 
     def __getitem__(self, index: int) -> np.ndarray:

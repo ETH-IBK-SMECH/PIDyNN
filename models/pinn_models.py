@@ -134,6 +134,11 @@ class sdof_pinn(nn.Module):
 
         '''
 
+        t_obs = t_obs.requires_grad_()
+        z_obs = z_obs.requires_grad_()
+        t_col = t_col.requires_grad_()
+        f_col = f_col.requires_grad_()
+
         if self.switches['obs']:
             # generate prediction in observation domain
             zp_obs_hat = self.forward(t_obs)

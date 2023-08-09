@@ -51,9 +51,9 @@ def create_dataset(phys_config: dict, sequence_length: int) -> Union[Duffing1DOF
         }
         example_parameters = {
             't_start': 0.0,
-            't_end': 120.0,
-            'dt': 120/1024,
-            'downsample': 12,
+            't_end': 1000.0,
+            'dt': 0.1,
+            'downsample': 10,
         }
         dataset = DuffingMDOFOscillator(example_system, example_parameters, seq_len=sequence_length)
     else:

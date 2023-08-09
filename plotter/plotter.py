@@ -58,12 +58,14 @@ class Plotter:
 
         Args:
             n_dof (int): Number of degrees of freedom.
+
             t_span_obs (np.ndarray): time vector for observation data domain
             obs_state (np.ndarray): values of observed state data
             t_span_gt (np.ndarray): time vector for gt/prediction domain
             prediction (np.ndarray): values of predicted state over gt/prediction domain
             ground_truth (np.ndarray): ground truth state values
             task (str): label indicating which task type is being plotted
+
 
         Returns:
             plt.Figure: The generated figure.

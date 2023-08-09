@@ -54,6 +54,7 @@ def main(config: argparse.Namespace) -> int:
             'kn': 10.0
         }
     }
+    
     model = create_model(config.model_type, config.in_channels, config.latent_features, config.out_channels, config.sequence_length, pinn_config)
     criterion = nn.MSELoss(reduction='sum')
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)

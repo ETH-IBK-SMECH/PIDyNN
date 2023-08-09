@@ -34,8 +34,7 @@ class Duffing1DOFOscillator(BaseDataset):
         print('Simulating 1DOF Duffing oscillator...')
 
         n_dof = 1
-        t_span = np.arange(simulation_parameters['t_start'], simulation_parameters['t_end'],
-                           simulation_parameters['dt'])
+        t_span = np.arange(simulation_parameters['t_start'], simulation_parameters['t_end'], simulation_parameters['dt'])
         external_force = np.random.normal(0, 1, [len(t_span), 1])
         freqs = np.array([0.7, 0.85, 1.6, 1.8])
         np.random.seed(43810)

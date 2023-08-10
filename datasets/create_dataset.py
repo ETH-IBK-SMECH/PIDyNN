@@ -5,7 +5,7 @@ import numpy as np
 from typing import Union
 
 
-def create_dataset(phys_config: dict, sequence_length: int) -> Union[Duffing1DOFOscillator, None]:
+def create_dataset(phys_config: dict, data_params: dict) -> Union[Duffing1DOFOscillator, None]:
     """
     Create a dataset based on the given system setup.
 
@@ -30,10 +30,14 @@ def create_dataset(phys_config: dict, sequence_length: int) -> Union[Duffing1DOF
         example_parameters = {
             't_start': 0.0,
             't_end': 30.0,
-            'dt': 120/1024,
-            'downsample' : 1,
+            'dt': 120/1024
         }
-        dataset = Duffing1DOFOscillator(example_system, example_parameters, seq_len=sequence_length)
+        data_parameters = {
+            'seq_len' : data_params['sequence_length'],
+            'subsample' : data_params['subsample'],
+            'downsample' : data_params['downsample']
+        }
+        dataset = Duffing1DOFOscillator(example_system, example_parameters, data_parameters)
     elif phys_config['system-type'] == 'multi_dof_duffing':
         example_system = {
             'n_dof': phys_config['n_dof'],

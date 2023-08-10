@@ -19,21 +19,24 @@ def main(config: argparse.Namespace) -> int:
         'n_dof': config.n_dof,
         'system-type': config.system_type
     }
+    data_parameters = {
+        'sequence_length' : config.sequence_length,
+        'subsample' : config.subsample,
+        'downsample' : config.downsample
+    }
     phases = ['train', 'val', 'test']
-    full_dataset = create_dataset(phys_config, config.sequence_length)
+    full_dataset = create_dataset(phys_config, data_parameters)
     train_size = 0.8
     val_size = 0.1
     test_size = 0.1
-    train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(full_dataset,
-                                                                             [train_size, val_size, test_size])
+    train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(full_dataset,[train_size, val_size, test_size])
     datasets = {
         'train': train_dataset,
         'val': val_dataset,
         'test': test_dataset
     }
     dataloaders = {
-        x: DataLoader(dataset=datasets[x], batch_size=config.batch_size, shuffle=True if x == 'train' else False,
-                      num_workers=config.num_workers, pin_memory=True) for x in phases}
+        x: DataLoader(dataset=datasets[x], batch_size=config.batch_size, shuffle=True if x == 'train' else False, num_workers=config.num_workers, pin_memory=True) for x in phases}
 
     # Create model
     if config.out_channels != 2 * config.n_dof:
@@ -46,7 +49,7 @@ def main(config: argparse.Namespace) -> int:
         'c_': config.c_,
         'k_': config.k_,
         'kn_': config.kn_,
-        'alphas': None,
+        'alphas': full_dataset.alphas,
         'param_norms': {
             'm': 1.0,
             'c': 1.0,
@@ -64,6 +67,7 @@ def main(config: argparse.Namespace) -> int:
     epoch = 0
     model = model.to(device)
     progress_bar = tqdm(total=config.num_epochs)  # progress bar moved outward to preserve while loop structure
+    loss_hist = []
     while epoch < config.num_epochs:
         write_string = ''
         write_string += 'Epoch {}\n'.format(epoch)
@@ -74,17 +78,20 @@ def main(config: argparse.Namespace) -> int:
                 model.train()
             else:
                 model.eval()
-            for i, sample in enumerate(dataloaders[phase]):
+            for i, (sample, coll_data) in enumerate(dataloaders[phase]):
                 # parse data sample
                 state = sample[..., :2*config.n_dof].to(device).float().requires_grad_()
                 t_span = sample[..., 2*config.n_dof].to(device).float().requires_grad_()
-                force = sample[..., 2*config.n_dof+1:].to(device).float().requires_grad_()
+                t_coll = coll_data[..., 2*config.n_dof].to(device).float().requires_grad_()
+                force = coll_data[..., 2*config.n_dof+1:].to(device).float().requires_grad_()
 
                 # switch according to task
                 match config.task:
                     case 'instance':
                         inputs = t_span
                         targets = state
+                        t_coll = t_coll.reshape(-1,config.sequence_length)  # unrolls collocation data
+                        force = force.reshape(-1,config.sequence_length,config.n_dof)
                     case 'k_plus_1':
                         t_span = t_span * full_dataset.alphas[2*config.n_dof]
                         inputs = (state[:, :-1], t_span[0, :-1] - t_span[0, :-1].min())  # ODE only needs relative time, possible work-arounds here: https://github.com/rtqichen/torchdiffeq/issues/122
@@ -99,7 +106,7 @@ def main(config: argparse.Namespace) -> int:
                     optimizer.zero_grad()
                 match config.task:
                     case 'instance':
-                        loss, losses, _ = model.loss_func(config.lambdas, inputs, targets, inputs, force)
+                        loss, losses, _ = model.loss_func(config.lambdas, inputs, targets, t_coll, force)
                     case 'k_plus_1' | 'pgnn':
                         predictions = model(inputs)
                         loss = criterion(predictions, targets)
@@ -137,27 +144,31 @@ def main(config: argparse.Namespace) -> int:
     # plot all samples of dataset
     # generate and collate all samples to full time window
     num_obs_samps = len(datasets['train']) * config.sequence_length  # total number of observation points
-    num_col_samps = len(datasets['train']) * config.sequence_length  # total number of collocation points (currently the same as observation, will be updated with collocation dataset update)
+    num_col_samps = len(datasets['train']) * config.subsample * config.sequence_length  # total number of collocation points
     match config.task:
         case 'instance':
             t_span_obs = torch.zeros((num_obs_samps)).numpy()  # time vector for observation domain
             obs_state = torch.zeros((num_obs_samps, 2 * config.n_dof))  # all state observations
             t_span_gt = torch.zeros((num_col_samps)).numpy()  # time vector for gt/prediction domain
-            ground_truth = torch.zeros((num_obs_samps, 3 * config.n_dof + 1)).numpy()  # all data for gound truth (state, time, force)
+            ground_truth = torch.zeros((num_col_samps, 3 * config.n_dof + 1)).numpy()  # all data for gound truth (state, time, force)
             predictions = torch.zeros((num_col_samps, 2 * config.n_dof)).numpy()  # all state predictions (same as collocation domain)
 
-            for i, sample in enumerate(datasets['train']):
-                inpoint = i*config.sequence_length
-                outpoint = (i+1)*config.sequence_length
+            for i, (sample, coll_data) in enumerate(dataloaders['train']):
+                inpoint_obs = i * config.batch_size * config.sequence_length
+                outpoint_obs = (i+1) * config.batch_size * config.sequence_length
+                inpoint_col = i * config.batch_size * config.subsample * config.sequence_length
+                outpoint_col = (i+1) * config.batch_size * config.subsample * config.sequence_length
 
-                obs_inputs = torch.from_numpy(sample[..., 2*config.n_dof]).to(device).float().unsqueeze(0)
-                t_span_obs[inpoint:outpoint] = obs_inputs.T.numpy().squeeze()
-                obs_state[inpoint:outpoint,:] = torch.from_numpy(sample[..., :2*config.n_dof]).float().unsqueeze(0)
+                obs_inputs = sample[..., 2 * config.n_dof].to(device).float()
+                t_span_obs[inpoint_obs:outpoint_obs] = obs_inputs.numpy().reshape(-1)
+                obs_state[inpoint_obs:outpoint_obs,:] = sample[..., :2 * config.n_dof].float().reshape(-1,2*config.n_dof)
 
-                ground_truth[inpoint:outpoint,:] = datasets['train'].dataset.get_original(datasets['train'].indices[i])
-                pred_inputs = torch.from_numpy(sample[..., 2*config.n_dof]).to(device).float().unsqueeze(0)
-                t_span_gt[inpoint:outpoint] = ground_truth[inpoint:outpoint, 2*config.n_dof].reshape(-1)
-                predictions[inpoint:outpoint,:] = model(pred_inputs).detach().cpu().squeeze().numpy()
+                t_coll = coll_data[..., 2 * config.n_dof].to(device).float().requires_grad_()
+                pred_inputs = t_coll.reshape(-1, config.sequence_length)
+
+                ground_truth[inpoint_col:outpoint_col,:] = coll_data.reshape(-1, 3 * config.n_dof + 1).cpu().numpy()
+                t_span_gt[inpoint_col:outpoint_col] = pred_inputs.reshape(-1).detach().cpu().numpy()
+                predictions[inpoint_col:outpoint_col, :] = model(pred_inputs).detach().cpu().reshape(-1, 2 * config.n_dof).numpy()
 
         case 'k_plus_1' | 'pgnn':
             t_span_obs = torch.zeros((num_obs_samps-1, 1)).numpy()  # time vector for observation domain
@@ -203,6 +214,8 @@ if __name__ == '__main__':
     # physical-model arguments
     parser.add_argument('--n-dof', type=int, default=1)
     parser.add_argument('--system-type', type=str, default='single_dof_duffing')
+    parser.add_argument('--subsample', type=int, default=1)
+    parser.add_argument('--downsample', type=int, default=1)
 
     # nn-model arguments
     parser.add_argument('--model-type', type=str, default='sdof_pinn')
@@ -225,10 +238,10 @@ if __name__ == '__main__':
 
     # training arguments
     parser.add_argument('--task', type=str, default="instance")
-    parser.add_argument('--batch-size', type=int, default=32)
+    parser.add_argument('--batch-size', type=int, default=16)
     parser.add_argument('--num-workers', type=int, default=0)
-    parser.add_argument('--num-epochs', type=int, default=200000)
-    parser.add_argument('--sequence-length', type=int, default=8)
+    parser.add_argument('--num-epochs', type=int, default=500000)
+    parser.add_argument('--sequence-length', type=int, default=2)
     parser.add_argument('--learning-rate', type=float, default=1e-4)
     parser.add_argument('--weight-decay', type=float, default=1e-4)
 

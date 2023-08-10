@@ -30,7 +30,7 @@ def duffing_oscillator(y: np.ndarray, t: float, f, k: float, c: float, alpha: fl
 
 
 class Duffing1DOFOscillator(BaseDataset):
-    def __init__(self, dynamic_system: dict, simulation_parameters: dict, seq_len: int):
+    def __init__(self, dynamic_system: dict, simulation_parameters: dict, data_params: dict):
         print('Simulating 1DOF Duffing oscillator...')
 
         n_dof = 1
@@ -43,6 +43,11 @@ class Duffing1DOFOscillator(BaseDataset):
         Sx = np.ones((4, 1))
         external_force = F_mat @ Sx
         fint = interp1d(t_span, external_force[:, 0], fill_value='extrapolate')
+
+        # set data parameters
+        self.seq_len = data_params['seq_len']
+        self.subsample = data_params['subsample']  # sub-samples simulation data
+        self.downsample = data_params['downsample']  # downsamples data for NN
 
         # Integrate the system using odeint
         solution = odeint(
@@ -58,30 +63,35 @@ class Duffing1DOFOscillator(BaseDataset):
             )
         )
 
-        # add forcing to dataset
-        data = np.concatenate([solution, t_span.reshape(-1, 1)], axis=1)
+        # add time and forcing to dataset
+        data = np.concatenate([solution, t_span.reshape(-1, 1), external_force], axis=1)
 
         # normalize data
         self.maximum = data.max(axis=0)
         self.minimum = data.min(axis=0)
-        self.downsample = simulation_parameters['downsample']
-        self.alphas = self.maximum
+        self.alphas = self.maximum - self.minimum
         self.alphas[self.alphas==0.0] = 1e12 # to remove division by zero
-        data = (data) / (self.alphas)
-        # save ground truth before sub_sampling
-        self.ground_truth = data
+        data = data / (self.alphas)
 
-        # reshape to number of batches
-        # 2 n_dof for state, 1 for time and 1 n_dof for force
-        data = data[:(data.shape[0] // (seq_len * self.downsample)) * (seq_len * self.downsample)] # cut off excess data
-        data = np.reshape(data, [-1, seq_len*self.downsample, 3 * n_dof + 1])
+        # organise data
+        # save ground truth prior
+        self.ground_truth = data
+        coll_data = data[:(data.shape[0] // (self.subsample * self.seq_len)) * (self.subsample * self.seq_len)]  # cut off excess from subsampling and sequence ordering
+        # subsample (this is to emulate lower sampling rate)
+        data = coll_data[::self.subsample]
+        coll_data = coll_data.reshape(-1, self.subsample, self.seq_len, 3 * n_dof + 1)  # reshapes collocation data to index at same level in batching
+        self.coll_data = coll_data
+
+        # data = data[:(data.shape[0] // (self.seq_len)) * self.seq_len] # cut off excess data
+        # data = data[:(data.shape[0] // (self.seq_len * self.downsample)) * (self.seq_len * self.downsample)]
+        data = data.reshape(-1, self.seq_len, 3 * n_dof + 1)
         self.data = data
 
     def __getitem__(self, index: int) -> np.ndarray:
-        return self.data[index, ::self.downsample]
+        return self.data[index,::self.downsample], self.coll_data[index]
 
     def get_original(self, index: int) -> np.ndarray:
-        return self.data[index]
+        return self.ground_truth[index]
 
     def __len__(self) -> int:
         return self.data.shape[0]
@@ -105,12 +115,19 @@ if __name__ == '__main__':
         't_start': 0.0,
         't_end': 120.0,
         'dt': 120 / 1024,
-        'downsample': 12,
     }
 
-    dataset = Duffing1DOFOscillator(example_system, example_parameters, seq_len=128)
+    data_parameters = {
+        'seq_len' : 4,
+        'subsample' : 4,
+        'downsample' : 1
+    }
+
+    dataset = Duffing1DOFOscillator(example_system, example_parameters, data_parameters)
 
     x = dataset[:, :, 0].reshape(-1)
+    x_ = dataset.coll_data[:, :, 0].reshape(-1)
+    t_ = dataset.coll_data[:, :, 2].reshape(-1)
     v = dataset[:, :, 1].reshape(-1)
     t = dataset[:, :, 2].reshape(-1)
     f = dataset[:, :, 3].reshape(-1)
@@ -119,6 +136,7 @@ if __name__ == '__main__':
 
     fig, axs = plt.subplots(3, 1, figsize=(12, 12))
     axs[0].plot(t, x)
+    axs[0].scatter(t_,x_,marker='x',color='tab:orange')
     axs[1].plot(t, v)
     axs[2].plot(t, f)
     plt.show()

@@ -1,10 +1,10 @@
 import numpy as np
-import datasets.mdof_sim as mdof_sim
+import mdof_sim
 from torch.utils.data import Dataset as BaseDataset
 
 
 class DuffingMDOFOscillator(BaseDataset):
-    def __init__(self, dynamic_system: dict, simulation_parameters: dict, seq_len: int):
+    def __init__(self, dynamic_system: dict, simulation_parameters: dict, data_params: dict):
         print('Simulating MDOF Duffing oscillator')
 
         n_dof = dynamic_system['n_dof']
@@ -27,26 +27,35 @@ class DuffingMDOFOscillator(BaseDataset):
         # add time and forcing to dataset
         data = np.concatenate((solution, t_span.reshape(-1,1), system.f.T),axis=1)
 
+        # set data parameters
+        self.seq_len = data_params['seq_len']
+        self.subsample = data_params['subsample']  # subsamples simulation data
+        self.downsample = data_params['downsample']  # downsamples data for NN
+
         # normalize data
         self.maximum = data.max(axis=0)
         self.minimum = data.min(axis=0)
         self.alphas = self.maximum - self.minimum
         self.alphas[self.alphas==0.0] = 1e12  # to remove division by zero
-        #data = (data) / (self.alphas)
-        data = (data - self.minimum) / (self.maximum - self.minimum)
-        self.downsample = simulation_parameters['downsample']
+        data = (data) / (self.alphas)
 
-        # reshape to number of batches
-        # 2 n_dof for state, 1 n_dof for force, and 1 for time
-        data = data[:(data.shape[0] // (seq_len * self.downsample)) * (seq_len * self.downsample)]  # cut off excess data
-        data = np.reshape(data, [-1, seq_len*self.downsample, 3 * n_dof + 1])
+        # organise data
+        # save ground_truth prior
+        self.ground_truth = data
+        coll_data = data[:(data.shape[0] // (self.subsample * self.seq_len)) * (self.subsample * self.seq_len)]  # cut off excess from subsampling and sequence ordering
+        # subsample (this emulates lower sampling rate)
+        data = coll_data[::self.subsample]
+        coll_data = coll_data.reshape(-1, self.subsample, self.seq_len, 3 * n_dof + 1)
+        self.coll_data = coll_data
+
+        data = data.reshape(-1, self.seq_len, 3 * n_dof + 1)
         self.data = data
 
     def __getitem__(self, index: int) -> np.ndarray:
-        return self.data[index, ::self.downsample]
+        return self.data[index, ::self.downsample], self.coll_data[index]
 
     def get_original(self, index: int) -> np.ndarray:
-        return self.data[index]
+        return self.ground_truth[index]
 
     def __len__(self) -> int:
         return self.data.shape[0]
@@ -57,35 +66,49 @@ class DuffingMDOFOscillator(BaseDataset):
 
 if __name__ == '__main__':
     example_system: dict = {
-        'n_dof': 4,
-        'mass_vector': np.array([1.0] * 4),
-        'damping_vector': np.array([0.25] * 4),
-        'stiffness_vector': np.array([10.0] * 4),
-        'nonlinear_stiffness_vector': np.array([2.0, 0.0, 0.0, 0.0]),
+        'n_dof': 3,
+        'mass_vector': np.array([1.0] * 3),
+        'damping_vector': np.array([0.25] * 3),
+        'stiffness_vector': np.array([10.0] * 3),
+        'nonlinear_stiffness_vector': np.array([20.0, 0.0, 0.0]),
         'excitations': [
-            None,
-            None,
             mdof_sim.actuators.rand_phase_ms(
                 freqs=np.array([0.7, 0.85, 1.6, 1.8]),
                 Sx=np.ones(4)
-            ),
-            None],
-        'initial_conditions': np.array([-2.0, 0.0, 0.0, 3.0, -2.0, 0.0, 0.0, 0.0])
+            ), None, None],
+        'initial_conditions': None
     }
 
     example_parameters: dict = {
         't_start': 0.0,
-        't_end': 1200.0,
-        'dt': 0.01,
-        'downsample': 10,
+        't_end': 60.0,
+        'dt': 60 / 1024
     }
 
-    dataset = DuffingMDOFOscillator(example_system, example_parameters, seq_len=1200)
+    data_parameters = {
+        'seq_len' : 1,
+        'subsample' : 4,
+        'downsample' : 1
+    }
 
-    sample = dataset[-1]
-    ground_truth = dataset.get_original(-1)
+    dataset = DuffingMDOFOscillator(example_system, example_parameters, data_parameters)
+
+    u_data = dataset.data[..., :example_system['n_dof']].squeeze()
+    ud_data = dataset.data[..., example_system['n_dof']:2 * example_system['n_dof']].squeeze()
+    t_data = dataset.data[..., 2 * example_system['n_dof']].reshape(-1)
+    u_coll = dataset.coll_data[..., :example_system['n_dof']].reshape(-1,example_system['n_dof'])
+    ud_coll = dataset.coll_data[..., example_system['n_dof']:2 * example_system['n_dof']].reshape(-1,example_system['n_dof'])
+    t_coll = dataset.coll_data[..., 2 * example_system['n_dof']].reshape(-1)
+    f_coll = dataset.coll_data[..., 2 * example_system['n_dof'] + 1:].reshape(-1,example_system['n_dof'])
+
     import matplotlib.pyplot as plt
+    fig, axs = plt.subplots(3, example_system['n_dof'], figsize=(12, 8))
 
-    plt.plot(sample[:, -1], sample[:, 0], 'o')
-    plt.plot(ground_truth[:, -1], ground_truth[:, 0])
+    for i in range(example_system['n_dof']):
+        axs[0,i].plot(t_data, u_data[:,i])
+        axs[0,i].scatter(t_coll, u_coll[:,i], marker='x', color='tab:orange')
+        axs[1,i].plot(t_data, ud_data[:,i])
+        axs[1,i].scatter(t_coll, ud_coll[:,i], marker='x', color='tab:orange')
+        axs[2,i].scatter(t_coll, f_coll[:,i], marker='x', color='tab:orange')
+
     plt.show()

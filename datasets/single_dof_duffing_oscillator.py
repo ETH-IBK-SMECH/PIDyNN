@@ -44,11 +44,6 @@ class Duffing1DOFOscillator(BaseDataset):
         external_force = F_mat @ Sx
         fint = interp1d(t_span, external_force[:, 0], fill_value='extrapolate')
 
-        # set data parameters
-        self.seq_len = data_params['seq_len']
-        self.subsample = data_params['subsample']  # sub-samples simulation data
-        self.downsample = data_params['downsample']  # downsamples data for NN
-
         # Integrate the system using odeint
         solution = odeint(
             duffing_oscillator,
@@ -65,6 +60,11 @@ class Duffing1DOFOscillator(BaseDataset):
 
         # add time and forcing to dataset
         data = np.concatenate([solution, t_span.reshape(-1, 1), external_force], axis=1)
+
+        # set data parameters
+        self.seq_len = data_params['seq_len']
+        self.subsample = data_params['subsample']  # sub-samples simulation data
+        self.downsample = data_params['downsample']  # downsamples data for NN
 
         # normalize data
         self.maximum = data.max(axis=0)

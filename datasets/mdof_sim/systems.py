@@ -1,5 +1,5 @@
 import numpy as np
-from datasets.mdof_sim.base import mdof_system
+from mdof_sim.base import mdof_system
 
 class symmetric(mdof_system):
     '''

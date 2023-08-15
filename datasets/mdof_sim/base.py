@@ -1,6 +1,6 @@
 import numpy as np
-from datasets.mdof_sim.simulators import *
-from datasets.mdof_sim.actuators import shaker
+from mdof_sim.simulators import *
+from mdof_sim.actuators import shaker
 import warnings
 
 class mdof_system:

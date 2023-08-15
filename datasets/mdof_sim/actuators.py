@@ -63,7 +63,7 @@ class rand_phase_ms(excitation):
     def _generate(self, tt: np.ndarray, seed: int=43810):
 
         np.random.seed(seed)
-        phases = np.random.rand(self.freqs.shape[0])
+        phases = np.random.randn(self.freqs.shape[0]) * pi/2
         F_mat = np.sin(tt.reshape(-1,1) @ self.freqs.reshape(1,-1) + phases.T)
 
         return (F_mat @ self.Sx).reshape(-1)

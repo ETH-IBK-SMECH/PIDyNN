@@ -30,7 +30,7 @@ def create_dataset(phys_config: dict, data_params: dict) -> Union[Duffing1DOFOsc
         example_parameters = {
             't_start': 0.0,
             't_end': 30.0,
-            'dt': 120/1024
+            'dt': 30/255
         }
         data_parameters = {
             'seq_len' : data_params['sequence_length'],
@@ -59,7 +59,7 @@ def create_dataset(phys_config: dict, data_params: dict) -> Union[Duffing1DOFOsc
             'dt': 0.1,
             'downsample': 10,
         }
-        dataset = DuffingMDOFOscillator(example_system, example_parameters, seq_len=sequence_length)
+        dataset = DuffingMDOFOscillator(example_system, example_parameters, seq_len=data_parameters['sequence_length'])
     else:
         raise NotImplementedError("Specified dataset type is not implemented.")
 

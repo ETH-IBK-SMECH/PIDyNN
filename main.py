@@ -120,17 +120,16 @@ def main(config: argparse.Namespace) -> int:
                             loss_hist.append([loss_it.item() for loss_it in losses] + [loss.item()])
                         case 'k_plus_1' | 'pgnn':
                             loss_hist.append(loss.item())
-            if phase == 'train':
-                if config.system_discovery:
-                    write_string += '\tSystem Parameters:\tc - {:.4f} [{:.2f}]\tk - {:.4f} [{:.2f}]\tkn - {:.4f} [{:.2f}]\n'.format(
-                        model.c_[0,0].item()*pinn_config['param_norms']['c'],
-                        config.c_[0,0].item(),
-                        model.k_[0,0].item()*pinn_config['param_norms']['k'],
-                        config.k_[0,0].item(),
-                        model.kn_[0,0].item()*pinn_config['param_norms']['kn'],
-                        config.kn_[0,0].item())
             
             write_string += '\tLoss {}\n'.format(phase_loss)
+        if config.system_discovery:
+            write_string += '\tSystem Parameters:\tc - {:.4f} [{:.2f}]\tk - {:.4f} [{:.2f}]\tkn - {:.4f} [{:.2f}]\n'.format(
+                model.c_[0,0].item()*pinn_config['param_norms']['c'],
+                config.c_[0,0].item(),
+                model.k_[0,0].item()*pinn_config['param_norms']['k'],
+                config.k_[0,0].item(),
+                model.kn_[0,0].item()*pinn_config['param_norms']['kn'],
+                config.kn_[0,0].item())
 
         tqdma.write(write_string)
         epoch += 1

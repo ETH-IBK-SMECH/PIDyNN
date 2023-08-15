@@ -73,8 +73,8 @@ class Plotter:
         spec = gridspec.GridSpec(ncols=n_dof, nrows=2, figure=self.fig)
         spec.update(wspace=0.5, hspace=0.5)  # spacing between subplots
 
-        (ground_truth, predictions, t_span_gt), ids1 = self.sort_data(t_span_gt, ground_truth, predictions, t_span_gt)
-        (obs_state, t_span_obs), ids2 = self.sort_data(t_span_obs, obs_state, t_span_obs)
+        (ground_truth, predictions, t_span_gt), _ = self.sort_data(t_span_gt, ground_truth, predictions, t_span_gt)
+        (obs_state, t_span_obs), _ = self.sort_data(t_span_obs, obs_state, t_span_obs)
 
         for kinetic in range(2):
             for dof in range(n_dof):

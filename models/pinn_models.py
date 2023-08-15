@@ -4,25 +4,6 @@ import models.pinn_systems as systems
 import models.pinn_nonlinearities as nonlinearities
 from typing import Tuple
 
-class ParamClipper(object):
-
-    def __init__(self, frequency=5):
-        self.frequency = frequency
-
-    def __call__(self, module):
-        if hasattr(module, 'c_'):
-            params_c = module.c_.data
-            params_c = params_c.clamp(0,None)
-            module.c_.data = params_c
-        if hasattr(module, 'k_'):
-            params_k = module.k_.data
-            params_k = params_k.clamp(0,None)
-            module.k_.data = params_k
-        if hasattr(module, 'kn_'):
-            params_kn = module.kn_.data
-            params_kn = params_kn.clamp(0,None)
-            module.kn_.data = params_kn
-
 class sdof_pinn(nn.Module):
     '''
     Arbitrary SDOF PINN
@@ -80,11 +61,6 @@ class sdof_pinn(nn.Module):
 
         print('Setting\instantiating physical parameters in PINN....')
         self.system_discovery = config['system_discovery']
-        if self.system_discovery:
-            self.m_ = config['m_'].requires_grad_()
-            self.register_parameter('c_', nn.Parameter(torch.ones(1,1)))
-            self.register_parameter('k_', nn.Parameter(torch.ones(1,1)))
-            self.register_parameter('kn_', nn.Parameter(torch.ones(1,1)))
         match config['phys_system_type']:
             case 'duffing_sdof':
                 self.system = systems.sdof_pinn_system(
@@ -96,6 +72,11 @@ class sdof_pinn(nn.Module):
                     )
                 self.config['nonlinearity'] = 'exponent_damping'
             #TODO: Add more cases of system here
+        if self.system_discovery:
+            self.m_ = config['m_'].requires_grad_()
+            self.register_parameter('c_', nn.Parameter(torch.ones(1,1)))
+            self.register_parameter('k_', nn.Parameter(torch.ones(1,1)))
+            self.register_parameter('kn_', nn.Parameter(torch.ones(1,1)))
 
         print('Setting normalisation constants....')
         self.alpha_t = torch.tensor(config['alphas'][2]).float()
@@ -143,6 +124,8 @@ class sdof_pinn(nn.Module):
             # generate prediction in observation domain
             zp_obs_hat = self.forward(t_obs)
             R_obs = zp_obs_hat.reshape(-1,2) - z_obs.reshape(-1,2)
+        else:
+            R_obs = torch.zeros((2,2))
 
         if self.switches['ode'] or self.switches['cc']:
             # generate prediction in collocation domain
@@ -151,7 +134,7 @@ class sdof_pinn(nn.Module):
             # retrieve derivatives
             dxdt_ = torch.zeros_like(zp_col_hat_)
             for i in range(zp_col_hat_.shape[2]):
-                dxdt_[:,:,i] = torch.autograd.grad(zp_col_hat_[:,:,i], t_col, torch.ones_like(zp_col_hat_[:,:,i]), create_graph=True)[0]  # ∂_t-hat N_x-hat
+                dxdt_[:,:,i] = torch.autograd.grad(zp_col_hat_[:,:,i], t_col, torch.ones_like(zp_col_hat_[:,:,i]), create_graph=True)[0]  # ∂_t-hat N_z(i)-hat
 
             # reshape for loss functions
             t_col_flat, col_sort_ids = torch.sort(t_col.reshape(-1))
@@ -190,17 +173,28 @@ class sdof_pinn(nn.Module):
         else:
             R_cc = torch.zeros((2))
 
+        if self.switches['ic']:
+            ic_id = torch.argwhere(t_col_flat==torch.tensor(0.0))
+            if ic_id.nelement()==0:
+                R_ic = torch.zeros(2)
+            else:
+                R_ic = zp_col_hat[ic_id,:].T
+        else:
+            R_ic = torch.zeros(2)
+
         residuals = {
             "R_obs" : R_obs,
             "R_cc" : R_cc,
-            "R_ode" : R_ode
+            "R_ode" : R_ode,
+            "R_ic" : R_ic
         }
 
         L_obs = lambdas['obs'] * torch.mean(torch.sum(R_obs**2, dim=1), dim=0)
         L_cc = lambdas['cc'] * torch.mean(R_cc**2, dim=0)
         L_ode = lambdas['ode'] * torch.mean(R_ode**2, dim=0)
+        L_ic = lambdas['ic'] * torch.mean(R_ic**2,dim=0)
 
-        loss = L_obs + L_cc + L_ode
-        return loss, [L_obs, L_cc, L_ode], residuals
+        loss = L_obs + L_cc + L_ode +L_ic
+        return loss, [L_obs, L_cc, L_ode, L_ic], residuals
 
     

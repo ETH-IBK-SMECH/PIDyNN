@@ -82,37 +82,37 @@ class Plotter:
 
                 if kinetic:
                     if n_dof>1:
-                        plt.title(r"$\dot{{u}}_{},~\mathrm{ms}^{-1}$".format(dof), fontproperties=self.prop)
+                        plt.title(r"$\dot{{u}}_{}~(\mathrm{ms}^{-1})$".format(dof), fontproperties=self.prop)
                     else:
-                        plt.ylabel(r"$\dot{u},~\mathrm{ms}^{-1}$", fontproperties=self.prop)
+                        plt.ylabel(r"$\dot{u}~(\mathrm{ms}^{-1})$", fontproperties=self.prop)
                 else:
                     if n_dof>1:
-                        plt.title(r"$u_{},~\mathrm{m}$".format(dof), fontproperties=self.prop)
+                        plt.title(r"$u_{}~(\mathrm{m}0$".format(dof), fontproperties=self.prop)
                     else:
-                        plt.ylabel(r"$u,~\mathrm{m}$", fontproperties=self.prop)
+                        plt.ylabel(r"$u~(\mathrm{m})$", fontproperties=self.prop)
 
-                plt.xlabel(r'Time, $s$', fontproperties=self.prop)
+                plt.xlabel(r'Time, $t$ (s)', fontproperties=self.prop)
                 channel = dof + kinetic
                 if self.includes["gt"]:
-                    plt.plot(t_span_gt, ground_truth[:, channel], label='Exact Solution', color=self.colors[0], linewidth=1.0)
+                    plt.plot(t_span_gt, ground_truth[:, channel], label='Exact Solution', color=self.colors[0], linewidth=2.0)
                 if self.includes["pred"]:
                     match task:
                         case 'instance':
-                            plt.plot(t_span_gt, predictions[:, channel], label='Prediction', linestyle='--', color=self.colors[1], linewidth=1.0)
+                            plt.plot(t_span_gt, predictions[:, channel], label='Prediction', linestyle='--', color=self.colors[1], linewidth=1.5)
                         case 'k_plus_1' | 'pgnn':
-                            plt.plot(t_span_gt[1:], predictions[:, channel], label='Prediction', linestyle='--', color=self.colors[1], linewidth=1.0)
+                            plt.plot(t_span_gt[1:], predictions[:, channel], label='Prediction', linestyle='--', color=self.colors[1], linewidth=1.5)
                 if self.includes["obs"]:
-                    plt.plot(t_span_obs, obs_state[:, channel], linestyle='None', marker='o', label='Observation Data', color=self.colors[2], markersize=0.15*self.prop.get_size())
+                    plt.plot(t_span_obs, obs_state[:, channel], linestyle='None', marker='o', label='Observation Data', color=self.colors[2], markersize=0.2*self.prop.get_size())
                 plt.xticks(fontproperties=self.prop)
                 plt.yticks(fontproperties=self.prop)
 
                 for axis in ['top','bottom','left','right']:
                     f_ax.spines[axis].set_linewidth(0.65)
 
-        self.fig.legend(*_get_legend_handles_labels([self.fig.axes[0]]), prop=self.prop)
         self.fig.set_figwidth(self.cm_to_inch(self.textwidth))
         self.fig.set_figheight(self.fig_ratio*self.cm_to_inch(self.textwidth))
         self.fig.align_ylabels(self.fig.axes)
+        self.fig.legend(*_get_legend_handles_labels([self.fig.axes[0]]), prop=self.prop, loc='upper center', bbox_to_anchor=(1.0, 0.6))
         return self.fig
 
     def show_figure(self):

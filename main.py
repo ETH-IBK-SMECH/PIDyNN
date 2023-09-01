@@ -227,7 +227,8 @@ if __name__ == '__main__':
     parser.add_argument('--lambdas', type=dict, default={
         'obs' : 1.0,
         'cc' : 1.0,
-        'ode' : 1.0
+        'ode' : 1.0,
+        'ic' : 0.0
     })
     parser.add_argument('--system-discovery', type=bool, default=True)
     parser.add_argument('--m-', type=torch.Tensor, default=torch.Tensor([[10.0]]))
@@ -239,7 +240,7 @@ if __name__ == '__main__':
     parser.add_argument('--task', type=str, default="instance")
     parser.add_argument('--batch-size', type=int, default=16)
     parser.add_argument('--num-workers', type=int, default=0)
-    parser.add_argument('--num-epochs', type=int, default=500000)
+    parser.add_argument('--num-epochs', type=int, default=100)
     parser.add_argument('--sequence-length', type=int, default=2)
     parser.add_argument('--learning-rate', type=float, default=1e-4)
     parser.add_argument('--weight-decay', type=float, default=1e-4)
